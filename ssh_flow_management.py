@@ -26,6 +26,8 @@ from jumpssh import SSHSession  # this library is blocking
 from pssh.config import HostConfig
 from pssh.clients import ParallelSSHClient
 import pssh.clients
+import datetime
+
 '''
 ====================================
 DEFINITIONS
@@ -38,7 +40,13 @@ gateways:   {ID: [IP, username, password]}
 vms:        {ID: [IP, username, password, Gateway ID]} where gw id is the host server ID for the VM
 
 '''
+IPERF_TIME = 60  # duration of the experiment, in seconds
+RECONFIGURATION_1=20
+RECONFIGURATION_2=40
+BW_IPERF = '2g'  # bandwidth for the experiment
+
 credentials = json.load(open('credentials.json'))
+
 # define the URL of the sdn controller app ofctl_rest
 OFCTL_REST_IP = credentials['ip']
 ADD_FLOW_URI = credentials['add_flow']
@@ -51,10 +59,11 @@ DPID_BR1 = int(credentials['dpid'][1])
 
 # define the gateway and vm credentials for ssh
 gateway_credentials = credentials['gateway_credentials']
-
 vm_credentials = credentials['vm_credentials']
 
-IPERF_TIME = 60
+# tcpdump directory
+#TCP_TEST_DIRECTORY = credentials['tcpdump_file_datapath'],
+TCP_TEST_DIRECTORY = "Desktop/pcap_files/"
 '''
 ====================================
 Section 1: SSH connection to the virtual machines.
@@ -77,8 +86,9 @@ This method will connect to the gateways and to the virtual machines through the
                                      |----vm4
 '''
 
-#Method using jumpssh
-def connect_to_vms_jumpssh(gateway_credentials = gateway_credentials, vm_credentials = vm_credentials):
+
+# Method using jumpssh
+def connect_to_vms_jumpssh(gateway_credentials=gateway_credentials, vm_credentials=vm_credentials):
     gateway_session = {}
     vm_session = {}
     # 1. Create the ssh connection to the gateways (host servers)
@@ -118,7 +128,7 @@ def close_all_ssh(vms, gws):
 
 # https://stackoverflow.com/questions/51237956/python-how-do-i-authenticate-ssh-connection-with-fabric-module
 # Method using fabric
-def connect_to_vms_fabric(gateway_credentials = gateway_credentials, vm_credentials = vm_credentials):
+def connect_to_vms_fabric(gateway_credentials=gateway_credentials, vm_credentials=vm_credentials):
     gateway_session = {}
     vm_session = {}
     # 1. Create the ssh connection to the gateways (host servers)
@@ -126,7 +136,7 @@ def connect_to_vms_fabric(gateway_credentials = gateway_credentials, vm_credenti
         try:
             gateway_session[val] = Connection(host=gateway_credentials[val][0],
                                               user=gateway_credentials[val][1],
-                                              connect_kwargs={'password':gateway_credentials[val][2]})
+                                              connect_kwargs={'password': gateway_credentials[val][2]})
         except:
             print('Could not connect to host server: ' + gateway_credentials[val][0])
     print('connected to host servers')
@@ -144,7 +154,9 @@ def connect_to_vms_fabric(gateway_credentials = gateway_credentials, vm_credenti
     print('connected to guest vms')
     return gateway_session, vm_session
 
-def connect_to_vms_pssh(gateway_credentials = gateway_credentials, vm_credentials = vm_credentials):
+
+# Method using parallel ssh
+def connect_to_vms_pssh(gateway_credentials=gateway_credentials, vm_credentials=vm_credentials):
     gateway_session = {}
     vm_session = {}
     # 1. Create the ssh connection to the gateways (host servers)
@@ -161,16 +173,16 @@ def connect_to_vms_pssh(gateway_credentials = gateway_credentials, vm_credential
     print('connected to host servers')
     # 2. Create the ssh connection to the virtual machines (guest servers)
     for i, val in enumerate(vm_credentials.keys()):
-        #try:
-            # vm_credentials[val][3] has the host server ID, the key in the gateway sessions dict.
+        # try:
+        # vm_credentials[val][3] has the host server ID, the key in the gateway sessions dict.
         vm_session[val] = pssh.clients.ParallelSSHClient(
-                hosts=[vm_credentials[val][0]],
-                host_config=[HostConfig(user=vm_credentials[val][1],
-                                        password=vm_credentials[val][2],
-                                        proxy_host=gateway_credentials[str(vm_credentials[val][3])][0],
-                                        proxy_user=gateway_credentials[str(vm_credentials[val][3])][1],
-                                        proxy_password=gateway_credentials[str(vm_credentials[val][3])][2])]
-            )
+            hosts=[vm_credentials[val][0]],
+            host_config=[HostConfig(user=vm_credentials[val][1],
+                                    password=vm_credentials[val][2],
+                                    proxy_host=gateway_credentials[str(vm_credentials[val][3])][0],
+                                    proxy_user=gateway_credentials[str(vm_credentials[val][3])][1],
+                                    proxy_password=gateway_credentials[str(vm_credentials[val][3])][2])]
+        )
         '''
                 pssh.clients.ParallelSSHClient(
                     hosts=[vm_credentials[val][0]],
@@ -178,59 +190,76 @@ def connect_to_vms_pssh(gateway_credentials = gateway_credentials, vm_credential
                                  password =vm_credentials[val][2],
                                  proxy_host=gateway_credentials[str(vm_credentials[val][3])][0]])
                                  '''
-        #except:
+        # except:
         #    print('Could not connect to guest vm: ' + vm_credentials[val][0])
     print('connected to guest vms')
     return gateway_session, vm_session
 
-# gws, vms = connect_to_vms_jumpssh()
-
-# print(vms[4].get_cmd_output('iperf3 -s'))
-# print(vms[1].get_cmd_output('iperf3 -c 10.0.0.4 -t 60'))
 
 # run iperf client
-def iperf_c(vm, t=60, ip_s='10.0.0.4'):
+def iperf_c(vm, t=IPERF_TIME, b=BW_IPERF, ip_s='10.0.0.4'):
     print('running iperf client')
-    #print(vm.run_cmd('iperf3 -c ' + ip_s + ' -t ' + str(t)))
-    #print(vm.run('iperf3 -c ' + ip_s + ' -t ' + str(t)))
-    vm.run_command('iperf3 -c ' + ip_s + ' -t ' + str(t))
+    # print(vm.run_cmd('iperf3 -c ' + ip_s + ' -t ' + str(t)))
+    # print(vm.run('iperf3 -c ' + ip_s + ' -t ' + str(t)))
+    vm.run_command('iperf3 -c ' + ip_s + ' -t ' + str(t) + ' -b ' + str(b))
     print('finishing iperf client')
     return None
 
 
 # run iperf server
-
 def iperf_s(vm):
     print('running iperf server')
-    #print(vm.run_cmd('iperf3 -s -1'))
-    #print(vm.run('iperf3 -s -1'))
+    # print(vm.run_cmd('iperf3 -s -1'))
+    # print(vm.run('iperf3 -s -1'))
     vm.run_command('iperf3 -s -1')
     print('finishing iperf server')
     return None
 
 
-'''
-print('\n====\nconnected to :\n ====\n virtual machines\n' )
-for i, val in enumerate(vms.keys()):
-    print(vms[val].get_cmd_output('hostname'))
-    vms[val].close()
-
-print('\n====\nconnected to :\n ====\ngateways\n' )
-for i, val in enumerate(gws.keys()):
-    print(gws[val].get_cmd_output('hostname'))
-    gws[val].close()
-'''
+# run tcpdump
+# https://parallel-ssh.readthedocs.io/en/latest/advanced.html?highlight=sudo#run-with-sudo
+def tcpdump_vm(vm,
+               sudo_password=vm_credentials['1'][2],
+               filename='test-',
+               directory=TCP_TEST_DIRECTORY,
+               t=IPERF_TIME+3,
+               vm_nic='enp2s0',
+               capture_size=96):
+    print('running tcpdump')
+    # filename structure: 'test-bandwidth-mm_dd_yyyy-hh-mm-ss.pcap'
+    # https://www.programiz.com/python-programming/datetime/strftime
+    if filename == 'test-':
+        filename += BW_IPERF+datetime.datetime.now().strftime("-%m_%d_%Y-%H_%M_%S")+'.pcap'
+    command='timeout ' + str(t)
+    command+= ' tcpdump -i ' + vm_nic
+    command+= ' -s '+ str(capture_size)
+    command+= ' -w ' + directory
+    command+= filename
+    print(command)
+    #out = vm.run_command(command)
+    vm.run_command(command)
+                        #'sudo timeout '
+                         #+ str(t)
+                         #+ ' tcpdump -i '
+                         #+ vm_nic
+                         #+ ' -s '
+                         #+ str(capture_size)
+                         #+ ' -w '
+                         ##+ str(directory)
+                         #+ filename)
+    #for host_out in out:
+    #    host_out.stdin.write(sudo_password+'\n')
+    #    host_out.stdin.flush()
+    print('finishing tcpdump')
+    return None
 
 '''
 ===========================================
 Section 2: HTTP requests to the OFCTL_REST.py app of the Ryu controller 
-on 10.0.200.2 (controller1 server)
+on controller1 server
 ===========================================
 '''
-
-
-# this method will help to create the payload required to add a flow.
-
+# this method helps to create the payload required to add a flow.
 def ofctl_flow_payload(dpid, action,
                        in_port, out_port,
                        ip_src, ip_dst, priority=10):
@@ -303,14 +332,12 @@ def add_flows_vm1_vm4():
     print('adding flows')
     return None
 
-
 # delete flows that match certain conditions.
 
 # clear flows per bridge
 def del_all_flows(dpid):
     r = requests.delete(url=OFCTL_REST_IP + CLEAR_FLOWS_URI + str(dpid))
     return None
-
 
 # TEMPORARY METHOD TO DELETE THE FLOWS FOR VM1 TO VM4 BETWEEN TRUNK1
 # must use delete_strict URI to consider deleting flows matching priority.
@@ -332,52 +359,60 @@ def del_flows_trunk1():
     return None
 
 
-# add_flows_vm1_vm4()
-
-# del_flows_trunk1()
-
+'''
+===========================================
+Section 3: Experiment
+===========================================
+'''
 # Connect to gateways and virtual machines
 gws, vms = connect_to_vms_pssh()
-#gws, vms = connect_to_vms_fabric()
-#print(vms.keys())
+# gws, vms = connect_to_vms_fabric()
+# print(vms.keys())
 '''
-Threading section
+Threading section - traffic reconfiguration with flow manipulation
 '''
-
-
 # Initialize flows
 add_flows_vm1_vm4()
 
 thread_instance = []
 # Reconfigure from trunk1 to trunk2
-reconfigure = threading.Timer(20, del_flows_trunk1)
+reconfigure = threading.Timer(RECONFIGURATION_1, del_flows_trunk1)
 reconfigure.start()
 thread_instance.append(reconfigure)
 
 # Return traffic to trunk1
-return_traffic = threading.Timer(50, add_flows_vm1_vm4)
+return_traffic = threading.Timer(RECONFIGURATION_2, add_flows_vm1_vm4)
 return_traffic.start()
 thread_instance.append(return_traffic)
 
-#run iperf
+'''
+ssh section - running iperf, tcpdump
+'''
+# run packet capture
+# This works once you add the user to a group with permissions to run tcpdump without sudo
+# https://askubuntu.com/questions/530920/tcpdump-permissions-problem
+tcpdump_vm(vms['1'])
+
+# run iperf
 iperf_s(vms['4'])
 iperf_c(vms['1'])
-#iperf_server = threading.Timer(0,iperf_s(vms['4']))
-#iperf_server.start()
-#iperf_client = threading.Timer(0,iperf_c(vms['1']))
-#iperf_client.start()
 
-#iperf_server = multiprocessing.Process(target=iperf_s(vms['4']))
-#iperf_server.start()
-#iperf_client=multiprocessing.Process(target=iperf_c(vms['1']))
-#iperf_client.start()
+# iperf_server = threading.Timer(0,iperf_s(vms['4']))
+# iperf_server.start()
+# iperf_client = threading.Timer(0,iperf_c(vms['1']))
+# iperf_client.start()
 
-#iperf_server.join()
-#iperf_client.join()
+# iperf_server = multiprocessing.Process(target=iperf_s(vms['4']))
+# iperf_server.start()
+# iperf_client=multiprocessing.Process(target=iperf_c(vms['1']))
+# iperf_client.start()
+
+# iperf_server.join()
+# iperf_client.join()
 
 # close all sessions
-#close_ssh = threading.Timer(61, close_all_ssh(vms, gws))
-#close_ssh.start()
+# close_ssh = threading.Timer(61, close_all_ssh(vms, gws))
+# close_ssh.start()
 
 for thread in thread_instance:
     thread.join()
