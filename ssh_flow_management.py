@@ -1,21 +1,31 @@
 '''
 Script to connect to the virtual machines through the gateways node1 and node2
+jumpssh: blocking
 https://pypi.org/project/jumpssh/
+
+fabric: non blocking
+https://www.fabfile.org/index.html
 
 William Orozco
 worozco@ucdavis.edu
 December 2021
 '''
 
+
 '''
 ====================================
 import libraries
 ====================================
 '''
-from jumpssh import SSHSession
-import requests
 import json
-
+import multiprocessing
+import threading  # threading does not work
+import requests
+from fabric import Connection  # this library is non blocking but uses threading
+from jumpssh import SSHSession  # this library is blocking
+from pssh.config import HostConfig
+from pssh.clients import ParallelSSHClient
+import pssh.clients
 '''
 ====================================
 DEFINITIONS
@@ -44,6 +54,7 @@ gateway_credentials = credentials['gateway_credentials']
 
 vm_credentials = credentials['vm_credentials']
 
+IPERF_TIME = 60
 '''
 ====================================
 Section 1: SSH connection to the virtual machines.
@@ -66,8 +77,8 @@ This method will connect to the gateways and to the virtual machines through the
                                      |----vm4
 '''
 
-
-def connect_to_vms(gw_cred=gateway_credentials, vm_cred=vm_credentials):
+#Method using jumpssh
+def connect_to_vms_jumpssh(gateway_credentials = gateway_credentials, vm_credentials = vm_credentials):
     gateway_session = {}
     vm_session = {}
     # 1. Create the ssh connection to the gateways (host servers)
@@ -76,27 +87,126 @@ def connect_to_vms(gw_cred=gateway_credentials, vm_cred=vm_credentials):
             gateway_session[val] = SSHSession(host=gateway_credentials[val][0],
                                               username=gateway_credentials[val][1],
                                               password=gateway_credentials[val][2]).open()
+
         except:
             print('Could not connect to host server: ' + gateway_credentials[val][0])
-
+    print('connected to host servers')
     # 2. Create the ssh connection to the virtual machines (guest servers)
     for i, val in enumerate(vm_credentials.keys()):
         try:
             # vm_credentials[val][3] has the host server ID, the key in the gateway sessions dict.
-            vm_session[val] = gateway_session[vm_credentials[val][3]].get_remote_session(
+            vm_session[val] = gateway_session[str(vm_credentials[val][3])].get_remote_session(
                 host=vm_credentials[val][0],
                 username=vm_credentials[val][1],
                 password=vm_credentials[val][2])
         except:
             print('Could not connect to guest vm: ' + vm_credentials[val][0])
-
+    print('connected to guest vms')
     return gateway_session, vm_session
 
 
-# gws, vms = connect_to_vms()
+def close_all_ssh(vms, gws):
+    # close vms first
+    for vm in vms:
+        vm.close()
+    print('closing ssh vm')
+    # then close gws
+    for gw in gws:
+        gw.close()
+    print('closing ssh gateways')
+    return None
+
+# https://stackoverflow.com/questions/51237956/python-how-do-i-authenticate-ssh-connection-with-fabric-module
+# Method using fabric
+def connect_to_vms_fabric(gateway_credentials = gateway_credentials, vm_credentials = vm_credentials):
+    gateway_session = {}
+    vm_session = {}
+    # 1. Create the ssh connection to the gateways (host servers)
+    for i, val in enumerate(gateway_credentials.keys()):
+        try:
+            gateway_session[val] = Connection(host=gateway_credentials[val][0],
+                                              user=gateway_credentials[val][1],
+                                              connect_kwargs={'password':gateway_credentials[val][2]})
+        except:
+            print('Could not connect to host server: ' + gateway_credentials[val][0])
+    print('connected to host servers')
+    # 2. Create the ssh connection to the virtual machines (guest servers)
+    for i, val in enumerate(vm_credentials.keys()):
+        try:
+            # vm_credentials[val][3] has the host server ID, the key in the gateway sessions dict.
+            vm_session[val] = Connection(
+                host=vm_credentials[val][0],
+                user=vm_credentials[val][1],
+                connect_kwargs={'password': vm_credentials[val][2]},
+                gateway=gateway_session[str(vm_credentials[val][3])])
+        except:
+            print('Could not connect to guest vm: ' + vm_credentials[val][0])
+    print('connected to guest vms')
+    return gateway_session, vm_session
+
+def connect_to_vms_pssh(gateway_credentials = gateway_credentials, vm_credentials = vm_credentials):
+    gateway_session = {}
+    vm_session = {}
+    # 1. Create the ssh connection to the gateways (host servers)
+    for i, val in enumerate(gateway_credentials.keys()):
+        try:
+            gateway_session[val] = \
+                pssh.clients.ParallelSSHClient(
+                    hosts=[gateway_credentials[val][0]],
+                    host_config=[HostConfig(user=gateway_credentials[val][1],
+                                            password=gateway_credentials[val][2])])
+
+        except:
+            print('Could not connect to host server: ' + gateway_credentials[val][0])
+    print('connected to host servers')
+    # 2. Create the ssh connection to the virtual machines (guest servers)
+    for i, val in enumerate(vm_credentials.keys()):
+        #try:
+            # vm_credentials[val][3] has the host server ID, the key in the gateway sessions dict.
+        vm_session[val] = pssh.clients.ParallelSSHClient(
+                hosts=[vm_credentials[val][0]],
+                host_config=[HostConfig(user=vm_credentials[val][1],
+                                        password=vm_credentials[val][2],
+                                        proxy_host=gateway_credentials[str(vm_credentials[val][3])][0],
+                                        proxy_user=gateway_credentials[str(vm_credentials[val][3])][1],
+                                        proxy_password=gateway_credentials[str(vm_credentials[val][3])][2])]
+            )
+        '''
+                pssh.clients.ParallelSSHClient(
+                    hosts=[vm_credentials[val][0]],
+                    host_config=[user=vm_credentials[val][1],
+                                 password =vm_credentials[val][2],
+                                 proxy_host=gateway_credentials[str(vm_credentials[val][3])][0]])
+                                 '''
+        #except:
+        #    print('Could not connect to guest vm: ' + vm_credentials[val][0])
+    print('connected to guest vms')
+    return gateway_session, vm_session
+
+# gws, vms = connect_to_vms_jumpssh()
 
 # print(vms[4].get_cmd_output('iperf3 -s'))
 # print(vms[1].get_cmd_output('iperf3 -c 10.0.0.4 -t 60'))
+
+# run iperf client
+def iperf_c(vm, t=60, ip_s='10.0.0.4'):
+    print('running iperf client')
+    #print(vm.run_cmd('iperf3 -c ' + ip_s + ' -t ' + str(t)))
+    #print(vm.run('iperf3 -c ' + ip_s + ' -t ' + str(t)))
+    vm.run_command('iperf3 -c ' + ip_s + ' -t ' + str(t))
+    print('finishing iperf client')
+    return None
+
+
+# run iperf server
+
+def iperf_s(vm):
+    print('running iperf server')
+    #print(vm.run_cmd('iperf3 -s -1'))
+    #print(vm.run('iperf3 -s -1'))
+    vm.run_command('iperf3 -s -1')
+    print('finishing iperf server')
+    return None
 
 
 '''
@@ -156,6 +266,7 @@ def ofctl_flow_payload(dpid, action,
     return payload
 
 
+# TEMPORARY METHOD TO ADD THE FLOWS FOR VM1 TO VM4 through TRUNK1 (higher priority) and TRUNK2 (lower priority),
 def add_flows_vm1_vm4():
     # Add flows for bridge 0:
     # Trunk1:
@@ -189,6 +300,7 @@ def add_flows_vm1_vm4():
     r = requests.post(url=OFCTL_REST_IP + ADD_FLOW_URI, data=flow6_payload)
     r = requests.post(url=OFCTL_REST_IP + ADD_FLOW_URI, data=flow7_payload)
     r = requests.post(url=OFCTL_REST_IP + ADD_FLOW_URI, data=flow8_payload)
+    print('adding flows')
     return None
 
 
@@ -216,15 +328,56 @@ def del_flows_trunk1():
     r = requests.post(url=OFCTL_REST_IP + DELETE_FLOWS_URI, data=flow2_payload)
     r = requests.post(url=OFCTL_REST_IP + DELETE_FLOWS_URI, data=flow3_payload)
     r = requests.post(url=OFCTL_REST_IP + DELETE_FLOWS_URI, data=flow4_payload)
+    print('removing flows trunk1')
     return None
 
 
-# import time
-# start = time.time()
-
-add_flows_vm1_vm4()
-
-# end = time.time()
-# print(end - start)
+# add_flows_vm1_vm4()
 
 # del_flows_trunk1()
+
+# Connect to gateways and virtual machines
+gws, vms = connect_to_vms_pssh()
+#gws, vms = connect_to_vms_fabric()
+#print(vms.keys())
+'''
+Threading section
+'''
+
+
+# Initialize flows
+add_flows_vm1_vm4()
+
+thread_instance = []
+# Reconfigure from trunk1 to trunk2
+reconfigure = threading.Timer(20, del_flows_trunk1)
+reconfigure.start()
+thread_instance.append(reconfigure)
+
+# Return traffic to trunk1
+return_traffic = threading.Timer(50, add_flows_vm1_vm4)
+return_traffic.start()
+thread_instance.append(return_traffic)
+
+#run iperf
+iperf_s(vms['4'])
+iperf_c(vms['1'])
+#iperf_server = threading.Timer(0,iperf_s(vms['4']))
+#iperf_server.start()
+#iperf_client = threading.Timer(0,iperf_c(vms['1']))
+#iperf_client.start()
+
+#iperf_server = multiprocessing.Process(target=iperf_s(vms['4']))
+#iperf_server.start()
+#iperf_client=multiprocessing.Process(target=iperf_c(vms['1']))
+#iperf_client.start()
+
+#iperf_server.join()
+#iperf_client.join()
+
+# close all sessions
+#close_ssh = threading.Timer(61, close_all_ssh(vms, gws))
+#close_ssh.start()
+
+for thread in thread_instance:
+    thread.join()
