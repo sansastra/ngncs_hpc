@@ -43,7 +43,7 @@ vms:        {ID: [IP, username, password, Gateway ID]} where gw id is the host s
 IPERF_TIME = 60  # duration of the experiment, in seconds
 RECONFIGURATION_1=20
 RECONFIGURATION_2=40
-BW_IPERF = '2g'  # bandwidth for the experiment
+BW_IPERF = '5g'  # bandwidth for the experiment
 
 credentials = json.load(open('credentials.json'))
 
@@ -358,12 +358,43 @@ def del_flows_trunk1():
     print('removing flows trunk1')
     return None
 
+# TEMPORARY METHOD TO ADD THE FLOWS FOR VM1 TO VM4 BETWEEN TRUNK1 ONLY
+# must use delete_strict URI to consider deleting flows matching priority.
+def add_flows_trunk1():
+    # Add flows for bridge 0:
+    # Trunk1:
+    flow1_payload = ofctl_flow_payload(action='ADD', dpid=DPID_BR0, in_port=1, out_port=5, ip_src='10.0.0.1',
+                                       ip_dst='10.0.0.4', priority=10)
+    flow2_payload = ofctl_flow_payload(action='ADD', dpid=DPID_BR0, in_port=5, out_port=1, ip_src='10.0.0.4',
+                                       ip_dst='10.0.0.1', priority=10)
+
+    # Add flows for bridge 1:
+    # Trunk1:
+    flow5_payload = ofctl_flow_payload(action='ADD', dpid=DPID_BR1, in_port=6, out_port=4, ip_src='10.0.0.1',
+                                       ip_dst='10.0.0.4', priority=10)
+    flow6_payload = ofctl_flow_payload(action='ADD', dpid=DPID_BR1, in_port=4, out_port=6, ip_src='10.0.0.4',
+                                       ip_dst='10.0.0.1', priority=10)
+
+    # Now add all the flows
+    r = requests.post(url=OFCTL_REST_IP + ADD_FLOW_URI, data=flow1_payload)
+    r = requests.post(url=OFCTL_REST_IP + ADD_FLOW_URI, data=flow2_payload)
+
+    r = requests.post(url=OFCTL_REST_IP + ADD_FLOW_URI, data=flow5_payload)
+    r = requests.post(url=OFCTL_REST_IP + ADD_FLOW_URI, data=flow6_payload)
+
+    print('adding flows')
+    return None
 
 '''
 ===========================================
 Section 3: Experiment
 ===========================================
 '''
+
+# Initialize flows. New: call before connecting to servers.
+add_flows_vm1_vm4()
+
+
 # Connect to gateways and virtual machines
 gws, vms = connect_to_vms_pssh()
 # gws, vms = connect_to_vms_fabric()
@@ -371,8 +402,7 @@ gws, vms = connect_to_vms_pssh()
 '''
 Threading section - traffic reconfiguration with flow manipulation
 '''
-# Initialize flows
-add_flows_vm1_vm4()
+
 
 thread_instance = []
 # Reconfigure from trunk1 to trunk2
@@ -381,7 +411,8 @@ reconfigure.start()
 thread_instance.append(reconfigure)
 
 # Return traffic to trunk1
-return_traffic = threading.Timer(RECONFIGURATION_2, add_flows_vm1_vm4)
+#return_traffic = threading.Timer(RECONFIGURATION_2, add_flows_vm1_vm4)
+return_traffic = threading.Timer(RECONFIGURATION_2, add_flows_trunk1)
 return_traffic.start()
 thread_instance.append(return_traffic)
 
