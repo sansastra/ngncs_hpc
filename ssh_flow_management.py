@@ -7,7 +7,7 @@ fabric: non blocking
 https://www.fabfile.org/index.html
 
 William Orozco
-worozco@ucdavis.edu
+worozco at ucdavis dot edu
 December 2021
 '''
 
@@ -19,11 +19,11 @@ import libraries
 '''
 import json
 import multiprocessing
-import threading  # threading does not work
+import threading
 import requests
-from fabric import Connection  # this library is non blocking but uses threading
+from fabric import Connection  # this library uses threading
 from jumpssh import SSHSession  # this library is blocking
-from pssh.config import HostConfig
+from pssh.config import HostConfig #This library worked.
 from pssh.clients import ParallelSSHClient
 import pssh.clients
 import datetime
@@ -223,13 +223,14 @@ def tcpdump_vm(vm,
                filename='test-',
                directory=TCP_TEST_DIRECTORY,
                t=IPERF_TIME+3,
+               bw=BW_IPERF,
                vm_nic='enp2s0',
                capture_size=96):
     print('running tcpdump')
     # filename structure: 'test-bandwidth-mm_dd_yyyy-hh-mm-ss.pcap'
     # https://www.programiz.com/python-programming/datetime/strftime
     if filename == 'test-':
-        filename += BW_IPERF+datetime.datetime.now().strftime("-%m_%d_%Y-%H_%M_%S")+'.pcap'
+        filename += bw+datetime.datetime.now().strftime("-%m_%d_%Y-%H_%M_%S")+'.pcap'
     command='timeout ' + str(t)
     command+= ' tcpdump -i ' + vm_nic
     command+= ' -s '+ str(capture_size)
@@ -332,6 +333,16 @@ def add_flows_vm1_vm4():
     print('adding flows')
     return None
 
+# TEMPORARY METHOD TO ADD THE FLOWS FOR VM1 TO VM4 through TRUNK1 (higher priority) and TRUNK2 (lower priority),
+def add_flows_vm1_vm4_v2():
+    # Trunk1:
+    add_flows_trunk1(priority=10)
+    add_flows_trunk1(priority=5)
+    # Trunk2:
+    add_flows_trunk2(priority=7)
+    print('adding flows v2')
+    return 0
+
 # delete flows that match certain conditions.
 
 # clear flows per bridge
@@ -341,39 +352,59 @@ def del_all_flows(dpid):
 
 # TEMPORARY METHOD TO DELETE THE FLOWS FOR VM1 TO VM4 BETWEEN TRUNK1
 # must use delete_strict URI to consider deleting flows matching priority.
-def del_flows_trunk1():
+def del_flows_trunk1(priority=10):
     flow1_payload = ofctl_flow_payload(dpid=DPID_BR0, in_port=1, out_port=5, ip_src='10.0.0.1', ip_dst='10.0.0.4',
-                                       action='DELETE')
+                                       action='DELETE', priority=priority)
     flow2_payload = ofctl_flow_payload(dpid=DPID_BR0, in_port=5, out_port=1, ip_src='10.0.0.4', ip_dst='10.0.0.1',
-                                       action='DELETE')
+                                       action='DELETE', priority=priority)
     flow3_payload = ofctl_flow_payload(dpid=DPID_BR1, in_port=6, out_port=4, ip_src='10.0.0.1', ip_dst='10.0.0.4',
-                                       action='DELETE')
+                                       action='DELETE', priority=priority)
     flow4_payload = ofctl_flow_payload(dpid=DPID_BR1, in_port=4, out_port=6, ip_src='10.0.0.4', ip_dst='10.0.0.1',
-                                       action='DELETE')
+                                       action='DELETE', priority=priority)
 
     r = requests.post(url=OFCTL_REST_IP + DELETE_FLOWS_URI, data=flow1_payload)
     r = requests.post(url=OFCTL_REST_IP + DELETE_FLOWS_URI, data=flow2_payload)
     r = requests.post(url=OFCTL_REST_IP + DELETE_FLOWS_URI, data=flow3_payload)
     r = requests.post(url=OFCTL_REST_IP + DELETE_FLOWS_URI, data=flow4_payload)
-    print('removing flows trunk1')
-    return None
+    print('removing flows trunk1  with priority ' + str(priority))
+    return
+
+
+# TEMPORARY METHOD TO DELETE THE FLOWS FOR VM1 TO VM4 BETWEEN TRUNK2
+# must use delete_strict URI to consider deleting flows matching priority.
+def del_flows_trunk2(priority=7):
+    flow1_payload = ofctl_flow_payload(dpid=DPID_BR0, in_port=1, out_port=7, ip_src='10.0.0.1', ip_dst='10.0.0.4',
+                                       action='DELETE', priority=priority)
+    flow2_payload = ofctl_flow_payload(dpid=DPID_BR0, in_port=7, out_port=1, ip_src='10.0.0.4', ip_dst='10.0.0.1',
+                                       action='DELETE', priority=priority)
+    flow3_payload = ofctl_flow_payload(dpid=DPID_BR1, in_port=8, out_port=4, ip_src='10.0.0.1', ip_dst='10.0.0.4',
+                                       action='DELETE', priority=priority)
+    flow4_payload = ofctl_flow_payload(dpid=DPID_BR1, in_port=4, out_port=8, ip_src='10.0.0.4', ip_dst='10.0.0.1',
+                                       action='DELETE', priority=priority)
+
+    r = requests.post(url=OFCTL_REST_IP + DELETE_FLOWS_URI, data=flow1_payload)
+    r = requests.post(url=OFCTL_REST_IP + DELETE_FLOWS_URI, data=flow2_payload)
+    r = requests.post(url=OFCTL_REST_IP + DELETE_FLOWS_URI, data=flow3_payload)
+    r = requests.post(url=OFCTL_REST_IP + DELETE_FLOWS_URI, data=flow4_payload)
+    print('removing flows trunk2 with priority ' + str(priority))
+    return
 
 # TEMPORARY METHOD TO ADD THE FLOWS FOR VM1 TO VM4 BETWEEN TRUNK1 ONLY
 # must use delete_strict URI to consider deleting flows matching priority.
-def add_flows_trunk1():
+def add_flows_trunk1(priority=3):
     # Add flows for bridge 0:
     # Trunk1:
     flow1_payload = ofctl_flow_payload(action='ADD', dpid=DPID_BR0, in_port=1, out_port=5, ip_src='10.0.0.1',
-                                       ip_dst='10.0.0.4', priority=10)
+                                       ip_dst='10.0.0.4', priority=priority)
     flow2_payload = ofctl_flow_payload(action='ADD', dpid=DPID_BR0, in_port=5, out_port=1, ip_src='10.0.0.4',
-                                       ip_dst='10.0.0.1', priority=10)
+                                       ip_dst='10.0.0.1', priority=priority)
 
     # Add flows for bridge 1:
     # Trunk1:
     flow5_payload = ofctl_flow_payload(action='ADD', dpid=DPID_BR1, in_port=6, out_port=4, ip_src='10.0.0.1',
-                                       ip_dst='10.0.0.4', priority=10)
+                                       ip_dst='10.0.0.4', priority=priority)
     flow6_payload = ofctl_flow_payload(action='ADD', dpid=DPID_BR1, in_port=4, out_port=6, ip_src='10.0.0.4',
-                                       ip_dst='10.0.0.1', priority=10)
+                                       ip_dst='10.0.0.1', priority=priority)
 
     # Now add all the flows
     r = requests.post(url=OFCTL_REST_IP + ADD_FLOW_URI, data=flow1_payload)
@@ -385,6 +416,30 @@ def add_flows_trunk1():
     print('adding flows')
     return None
 
+def add_flows_trunk2(priority=5):
+    # Add flows for bridge 0:
+    # Trunk1:
+    flow1_payload = ofctl_flow_payload(action='ADD', dpid=DPID_BR0, in_port=1, out_port=7, ip_src='10.0.0.1',
+                                       ip_dst='10.0.0.4', priority=priority)
+    flow2_payload = ofctl_flow_payload(action='ADD', dpid=DPID_BR0, in_port=7, out_port=1, ip_src='10.0.0.4',
+                                       ip_dst='10.0.0.1', priority=priority)
+
+    # Add flows for bridge 1:
+    # Trunk1:
+    flow5_payload = ofctl_flow_payload(action='ADD', dpid=DPID_BR1, in_port=8, out_port=4, ip_src='10.0.0.1',
+                                       ip_dst='10.0.0.4', priority=priority)
+    flow6_payload = ofctl_flow_payload(action='ADD', dpid=DPID_BR1, in_port=4, out_port=8, ip_src='10.0.0.4',
+                                       ip_dst='10.0.0.1', priority=priority)
+
+    # Now add all the flows
+    r = requests.post(url=OFCTL_REST_IP + ADD_FLOW_URI, data=flow1_payload)
+    r = requests.post(url=OFCTL_REST_IP + ADD_FLOW_URI, data=flow2_payload)
+
+    r = requests.post(url=OFCTL_REST_IP + ADD_FLOW_URI, data=flow5_payload)
+    r = requests.post(url=OFCTL_REST_IP + ADD_FLOW_URI, data=flow6_payload)
+
+    print('adding flows trunk 2 with priority ' + str(priority))
+    return None
 '''
 ===========================================
 Section 3: Experiment
@@ -392,11 +447,11 @@ Section 3: Experiment
 '''
 
 # Initialize flows. New: call before connecting to servers.
-add_flows_vm1_vm4()
+####add_flows_vm1_vm4()
 
 
 # Connect to gateways and virtual machines
-gws, vms = connect_to_vms_pssh()
+####gws, vms = connect_to_vms_pssh()
 # gws, vms = connect_to_vms_fabric()
 # print(vms.keys())
 '''
@@ -404,17 +459,17 @@ Threading section - traffic reconfiguration with flow manipulation
 '''
 
 
-thread_instance = []
+####thread_instance = []
 # Reconfigure from trunk1 to trunk2
-reconfigure = threading.Timer(RECONFIGURATION_1, del_flows_trunk1)
-reconfigure.start()
-thread_instance.append(reconfigure)
+####reconfigure = threading.Timer(RECONFIGURATION_1, del_flows_trunk1)
+####reconfigure.start()
+####thread_instance.append(reconfigure)
 
 # Return traffic to trunk1
 #return_traffic = threading.Timer(RECONFIGURATION_2, add_flows_vm1_vm4)
-return_traffic = threading.Timer(RECONFIGURATION_2, add_flows_trunk1)
-return_traffic.start()
-thread_instance.append(return_traffic)
+####return_traffic = threading.Timer(RECONFIGURATION_2, add_flows_trunk1)
+####return_traffic.start()
+####thread_instance.append(return_traffic)
 
 '''
 ssh section - running iperf, tcpdump
@@ -422,11 +477,11 @@ ssh section - running iperf, tcpdump
 # run packet capture
 # This works once you add the user to a group with permissions to run tcpdump without sudo
 # https://askubuntu.com/questions/530920/tcpdump-permissions-problem
-tcpdump_vm(vms['1'])
+####tcpdump_vm(vms['1'])
 
 # run iperf
-iperf_s(vms['4'])
-iperf_c(vms['1'])
+####iperf_s(vms['4'])
+####iperf_c(vms['1'])
 
 # iperf_server = threading.Timer(0,iperf_s(vms['4']))
 # iperf_server.start()
@@ -445,5 +500,5 @@ iperf_c(vms['1'])
 # close_ssh = threading.Timer(61, close_all_ssh(vms, gws))
 # close_ssh.start()
 
-for thread in thread_instance:
-    thread.join()
+####for thread in thread_instance:
+####    thread.join()
