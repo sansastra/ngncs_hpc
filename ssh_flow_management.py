@@ -56,6 +56,8 @@ DELETE_FLOWS_URI = credentials['delete_flow']
 # datapath ID of virtual bridges in pica8 switch - TODO: GET THIS DATA AUTOMATICALLY
 DPID_BR0 = int(credentials['dpid'][0])
 DPID_BR1 = int(credentials['dpid'][1])
+DPID_BR2 = int(credentials['dpid'][2])
+DPID_BR3 = int(credentials['dpid'][3])
 
 # define the gateway and vm credentials for ssh
 gateway_credentials = credentials['gateway_credentials']
@@ -440,6 +442,62 @@ def add_flows_trunk2(priority=5):
 
     print('adding flows trunk 2 with priority ' + str(priority))
     return None
+
+def edit_bidirectional_flows(dpid,in_port,out_port,ip_src,ip_dst,action='ADD',priority=1):
+    forward_flow_payload = ofctl_flow_payload(action=action, dpid=dpid,
+                                              in_port=in_port, out_port=out_port,
+                                              ip_src=ip_src,ip_dst=ip_dst, priority=priority)
+
+    reverse_flow_payload = ofctl_flow_payload(action=action, dpid=dpid,
+                                              in_port=out_port, out_port=in_port,
+                                              ip_src=ip_dst, ip_dst=ip_src, priority=priority)
+
+    # Now add all the flows
+    if action == 'ADD':
+        URI = ADD_FLOW_URI
+    else:
+        URI = DELETE_FLOWS_URI
+    r = requests.post(url=OFCTL_REST_IP + URI, data=forward_flow_payload)
+    r = requests.post(url=OFCTL_REST_IP + URI, data=reverse_flow_payload)
+    print(str(action)+' flows on bridge '+str(dpid) + " for ips@ports "
+          + str(ip_src)+'@'+ str(in_port) + ', '
+          + str(ip_dst)+'@'+ str(out_port)
+          + ' with priority ' + str(priority))
+    return None
+
+def edit_flows_vm2_vm3_long_path(action='ADD',priority=8):
+    # edit flows for bridge 2:
+    edit_bidirectional_flows(action=action, dpid=DPID_BR2, in_port=3, out_port=17,
+                             ip_src='10.0.0.2', ip_dst='10.0.0.3', priority=priority)
+    # edit flows for bridge 3:
+    edit_bidirectional_flows(action=action, dpid=DPID_BR3, in_port=19, out_port=2,
+                             ip_src='10.0.0.2', ip_dst='10.0.0.3', priority=priority)
+    # edit flows for bridge 0:
+    edit_bidirectional_flows(action=action, dpid=DPID_BR0, in_port=20, out_port=5,
+                             ip_src='10.0.0.2', ip_dst='10.0.0.3', priority=priority)
+    # edit flows for bridge 1:
+    edit_bidirectional_flows(action=action, dpid=DPID_BR1, in_port=6, out_port=18,
+                             ip_src='10.0.0.2', ip_dst='10.0.0.3', priority=priority)
+
+    return None
+
+def edit_flows_vm2_vm3_short_path(action='ADD', priority=6):
+    # Add flows for bridge 2:
+    edit_bidirectional_flows(action=action, dpid=DPID_BR2, in_port=3, out_port=7,
+                             ip_src='10.0.0.2',ip_dst='10.0.0.3', priority=priority)
+    # Add flows for bridge 3:
+    edit_bidirectional_flows(action=action, dpid=DPID_BR3, in_port=8, out_port=2,
+                             ip_src='10.0.0.2', ip_dst='10.0.0.3', priority=priority)
+    return None
+
+'''
+**********************************************
+Methods for experiment with topology #2
+**********************************************
+'''
+
+
+
 '''
 ===========================================
 Section 3: Experiment
