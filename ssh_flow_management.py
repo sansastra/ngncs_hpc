@@ -21,6 +21,7 @@ import json
 import multiprocessing
 import threading
 import requests
+import socket
 from fabric import Connection  # this library uses threading
 from jumpssh import SSHSession  # this library is blocking
 from pssh.config import HostConfig #This library worked.
@@ -467,13 +468,13 @@ def edit_bidirectional_flows(dpid,in_port,out_port,ip_src,ip_dst,action='ADD',pr
 
 def edit_flows_vm2_vm3_long_path(action='ADD',priority=8):
     # edit flows for bridge 2:
-    edit_bidirectional_flows(action=action, dpid=DPID_BR2, in_port=3, out_port=17,
+    edit_bidirectional_flows(action=action, dpid=DPID_BR2, in_port=3, out_port=20,
                              ip_src='10.0.0.2', ip_dst='10.0.0.3', priority=priority)
     # edit flows for bridge 3:
     edit_bidirectional_flows(action=action, dpid=DPID_BR3, in_port=19, out_port=2,
                              ip_src='10.0.0.2', ip_dst='10.0.0.3', priority=priority)
     # edit flows for bridge 0:
-    edit_bidirectional_flows(action=action, dpid=DPID_BR0, in_port=20, out_port=5,
+    edit_bidirectional_flows(action=action, dpid=DPID_BR0, in_port=17, out_port=5,
                              ip_src='10.0.0.2', ip_dst='10.0.0.3', priority=priority)
     # edit flows for bridge 1:
     edit_bidirectional_flows(action=action, dpid=DPID_BR1, in_port=6, out_port=18,
@@ -484,7 +485,7 @@ def edit_flows_vm2_vm3_long_path(action='ADD',priority=8):
 def edit_flows_vm2_vm3_short_path(action='ADD', priority=6):
     # Add flows for bridge 2:
     edit_bidirectional_flows(action=action, dpid=DPID_BR2, in_port=3, out_port=7,
-                             ip_src='10.0.0.2',ip_dst='10.0.0.3', priority=priority)
+                             ip_src='10.0.0.2', ip_dst='10.0.0.3', priority=priority)
     # Add flows for bridge 3:
     edit_bidirectional_flows(action=action, dpid=DPID_BR3, in_port=8, out_port=2,
                              ip_src='10.0.0.2', ip_dst='10.0.0.3', priority=priority)
@@ -492,10 +493,31 @@ def edit_flows_vm2_vm3_short_path(action='ADD', priority=6):
 
 '''
 **********************************************
-Methods for experiment with topology #2
+Methods for opening a TCP socket and send commands to the optical switch. 
+Protocol: SCPI
 **********************************************
 '''
 
+#Open TCP socket
+def ots_connect_tcp_socket(ip, port):
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.connect((ip, port))
+    return s
+
+#https://stackoverflow.com/questions/63214198/when-creating-bytes-with-b-prefix-before-string-what-encoding-does-python-use
+def ots_connect_port(s, port_in, port_out):
+    port_in_str = ','.join(str(i) for i in port_in)
+    port_out_str = ','.join(str(i) for i in port_out)
+    cmd = ':oxc:swit:conn:only (@{0}),(@{1}); stat?\r\n'.format(port_in_str, port_out_str)
+    cmd = bytes(cmd, 'utf-8')
+    s.sendall(cmd)
+    reply = s.recv(4096)
+    return reply
+
+def ots_disconnect_all(s):
+    cmd=b':oxc:swit:disc:all\r\n'
+    s.sendall(cmd)
+    return None
 
 
 '''
