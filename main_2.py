@@ -55,10 +55,10 @@ CLEAR_FLOWS_URI = credentials['clear_flow']
 DELETE_FLOWS_URI = credentials['delete_flow']
 
 # datapath ID of virtual bridges in pica8 switch - TODO: GET THIS DATA AUTOMATICALLY
-DPID_BR0 = int(credentials['dpid'][0])
-DPID_BR1 = int(credentials['dpid'][1])
-DPID_BR2 = int(credentials['dpid'][2])
-DPID_BR3 = int(credentials['dpid'][3])
+DPID_BR1 = int(credentials['dpid'][0])
+DPID_BR2 = int(credentials['dpid'][1])
+DPID_BR3 = int(credentials['dpid'][2])
+DPID_BR4 = int(credentials['dpid'][3])
 
 # define the gateway and vm credentials for ssh
 gateway_credentials = credentials['gateway_credentials']
@@ -73,7 +73,7 @@ TCP_TEST_DIRECTORY = credentials['tcpdump_file_datapath']
 ===========================================
 
 Experiment topology 2
-vm1 -------- bridge0 ------------------bridge1 ----------- vm4 
+vm1 -------- bridge1 ------------------bridge4 ----------- vm4 
 				|							|
 				|							|
 				|							|
@@ -84,10 +84,10 @@ vm2 -------- bridge2 ------------------bridge3 ----------- vm3
 '''
 # clear flow tables for all bridges
 # Do not forget to check that all the bridges are connected to the controller.
-del_all_flows(DPID_BR0)
 del_all_flows(DPID_BR1)
 del_all_flows(DPID_BR2)
 del_all_flows(DPID_BR3)
+del_all_flows(DPID_BR4)
 
 # Initialize flows. Call before connecting to servers. Make before break approach
 

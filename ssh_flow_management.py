@@ -55,10 +55,10 @@ CLEAR_FLOWS_URI = credentials['clear_flow']
 DELETE_FLOWS_URI = credentials['delete_flow']
 
 # datapath ID of virtual bridges in pica8 switch - TODO: GET THIS DATA AUTOMATICALLY
-DPID_BR0 = int(credentials['dpid'][0])
-DPID_BR1 = int(credentials['dpid'][1])
-DPID_BR2 = int(credentials['dpid'][2])
-DPID_BR3 = int(credentials['dpid'][3])
+DPID_BR1 = int(credentials['dpid'][0])
+DPID_BR2 = int(credentials['dpid'][1])
+DPID_BR3 = int(credentials['dpid'][2])
+DPID_BR4 = int(credentials['dpid'][3])
 
 # define the gateway and vm credentials for ssh
 gateway_credentials = credentials['gateway_credentials']
@@ -303,26 +303,26 @@ def ofctl_flow_payload(dpid, action,
 def add_flows_vm1_vm4():
     # Add flows for bridge 0:
     # Trunk1:
-    flow1_payload = ofctl_flow_payload(action='ADD', dpid=DPID_BR0, in_port=1, out_port=5, ip_src='10.0.0.1',
+    flow1_payload = ofctl_flow_payload(action='ADD', dpid=DPID_BR1, in_port=1, out_port=5, ip_src='10.0.0.1',
                                        ip_dst='10.0.0.4', priority=10)
-    flow2_payload = ofctl_flow_payload(action='ADD', dpid=DPID_BR0, in_port=5, out_port=1, ip_src='10.0.0.4',
+    flow2_payload = ofctl_flow_payload(action='ADD', dpid=DPID_BR1, in_port=5, out_port=1, ip_src='10.0.0.4',
                                        ip_dst='10.0.0.1', priority=10)
     # Trunk2:
-    flow3_payload = ofctl_flow_payload(action='ADD', dpid=DPID_BR0, in_port=1, out_port=7, ip_src='10.0.0.1',
+    flow3_payload = ofctl_flow_payload(action='ADD', dpid=DPID_BR1, in_port=1, out_port=7, ip_src='10.0.0.1',
                                        ip_dst='10.0.0.4', priority=5)
-    flow4_payload = ofctl_flow_payload(action='ADD', dpid=DPID_BR0, in_port=7, out_port=1, ip_src='10.0.0.4',
+    flow4_payload = ofctl_flow_payload(action='ADD', dpid=DPID_BR1, in_port=7, out_port=1, ip_src='10.0.0.4',
                                        ip_dst='10.0.0.1', priority=5)
 
     # Add flows for bridge 1:
     # Trunk1:
-    flow5_payload = ofctl_flow_payload(action='ADD', dpid=DPID_BR1, in_port=6, out_port=4, ip_src='10.0.0.1',
+    flow5_payload = ofctl_flow_payload(action='ADD', dpid=DPID_BR4, in_port=6, out_port=4, ip_src='10.0.0.1',
                                        ip_dst='10.0.0.4', priority=10)
-    flow6_payload = ofctl_flow_payload(action='ADD', dpid=DPID_BR1, in_port=4, out_port=6, ip_src='10.0.0.4',
+    flow6_payload = ofctl_flow_payload(action='ADD', dpid=DPID_BR4, in_port=4, out_port=6, ip_src='10.0.0.4',
                                        ip_dst='10.0.0.1', priority=10)
     # Trunk2:
-    flow7_payload = ofctl_flow_payload(action='ADD', dpid=DPID_BR1, in_port=8, out_port=4, ip_src='10.0.0.1',
+    flow7_payload = ofctl_flow_payload(action='ADD', dpid=DPID_BR4, in_port=8, out_port=4, ip_src='10.0.0.1',
                                        ip_dst='10.0.0.4', priority=5)
-    flow8_payload = ofctl_flow_payload(action='ADD', dpid=DPID_BR1, in_port=4, out_port=8, ip_src='10.0.0.4',
+    flow8_payload = ofctl_flow_payload(action='ADD', dpid=DPID_BR4, in_port=4, out_port=8, ip_src='10.0.0.4',
                                        ip_dst='10.0.0.1', priority=5)
     # Now add all the flows
     r = requests.post(url=OFCTL_REST_IP + ADD_FLOW_URI, data=flow1_payload)
@@ -356,13 +356,13 @@ def del_all_flows(dpid):
 # TEMPORARY METHOD TO DELETE THE FLOWS FOR VM1 TO VM4 BETWEEN TRUNK1
 # must use delete_strict URI to consider deleting flows matching priority.
 def del_flows_trunk1(priority=10):
-    flow1_payload = ofctl_flow_payload(dpid=DPID_BR0, in_port=1, out_port=5, ip_src='10.0.0.1', ip_dst='10.0.0.4',
+    flow1_payload = ofctl_flow_payload(dpid=DPID_BR1, in_port=1, out_port=5, ip_src='10.0.0.1', ip_dst='10.0.0.4',
                                        action='DELETE', priority=priority)
-    flow2_payload = ofctl_flow_payload(dpid=DPID_BR0, in_port=5, out_port=1, ip_src='10.0.0.4', ip_dst='10.0.0.1',
+    flow2_payload = ofctl_flow_payload(dpid=DPID_BR1, in_port=5, out_port=1, ip_src='10.0.0.4', ip_dst='10.0.0.1',
                                        action='DELETE', priority=priority)
-    flow3_payload = ofctl_flow_payload(dpid=DPID_BR1, in_port=6, out_port=4, ip_src='10.0.0.1', ip_dst='10.0.0.4',
+    flow3_payload = ofctl_flow_payload(dpid=DPID_BR4, in_port=6, out_port=4, ip_src='10.0.0.1', ip_dst='10.0.0.4',
                                        action='DELETE', priority=priority)
-    flow4_payload = ofctl_flow_payload(dpid=DPID_BR1, in_port=4, out_port=6, ip_src='10.0.0.4', ip_dst='10.0.0.1',
+    flow4_payload = ofctl_flow_payload(dpid=DPID_BR4, in_port=4, out_port=6, ip_src='10.0.0.4', ip_dst='10.0.0.1',
                                        action='DELETE', priority=priority)
 
     r = requests.post(url=OFCTL_REST_IP + DELETE_FLOWS_URI, data=flow1_payload)
@@ -376,13 +376,13 @@ def del_flows_trunk1(priority=10):
 # TEMPORARY METHOD TO DELETE THE FLOWS FOR VM1 TO VM4 BETWEEN TRUNK2
 # must use delete_strict URI to consider deleting flows matching priority.
 def del_flows_trunk2(priority=7):
-    flow1_payload = ofctl_flow_payload(dpid=DPID_BR0, in_port=1, out_port=7, ip_src='10.0.0.1', ip_dst='10.0.0.4',
+    flow1_payload = ofctl_flow_payload(dpid=DPID_BR1, in_port=1, out_port=7, ip_src='10.0.0.1', ip_dst='10.0.0.4',
                                        action='DELETE', priority=priority)
-    flow2_payload = ofctl_flow_payload(dpid=DPID_BR0, in_port=7, out_port=1, ip_src='10.0.0.4', ip_dst='10.0.0.1',
+    flow2_payload = ofctl_flow_payload(dpid=DPID_BR1, in_port=7, out_port=1, ip_src='10.0.0.4', ip_dst='10.0.0.1',
                                        action='DELETE', priority=priority)
-    flow3_payload = ofctl_flow_payload(dpid=DPID_BR1, in_port=8, out_port=4, ip_src='10.0.0.1', ip_dst='10.0.0.4',
+    flow3_payload = ofctl_flow_payload(dpid=DPID_BR4, in_port=8, out_port=4, ip_src='10.0.0.1', ip_dst='10.0.0.4',
                                        action='DELETE', priority=priority)
-    flow4_payload = ofctl_flow_payload(dpid=DPID_BR1, in_port=4, out_port=8, ip_src='10.0.0.4', ip_dst='10.0.0.1',
+    flow4_payload = ofctl_flow_payload(dpid=DPID_BR4, in_port=4, out_port=8, ip_src='10.0.0.4', ip_dst='10.0.0.1',
                                        action='DELETE', priority=priority)
 
     r = requests.post(url=OFCTL_REST_IP + DELETE_FLOWS_URI, data=flow1_payload)
@@ -397,16 +397,16 @@ def del_flows_trunk2(priority=7):
 def add_flows_trunk1(priority=3):
     # Add flows for bridge 0:
     # Trunk1:
-    flow1_payload = ofctl_flow_payload(action='ADD', dpid=DPID_BR0, in_port=1, out_port=5, ip_src='10.0.0.1',
+    flow1_payload = ofctl_flow_payload(action='ADD', dpid=DPID_BR1, in_port=1, out_port=5, ip_src='10.0.0.1',
                                        ip_dst='10.0.0.4', priority=priority)
-    flow2_payload = ofctl_flow_payload(action='ADD', dpid=DPID_BR0, in_port=5, out_port=1, ip_src='10.0.0.4',
+    flow2_payload = ofctl_flow_payload(action='ADD', dpid=DPID_BR1, in_port=5, out_port=1, ip_src='10.0.0.4',
                                        ip_dst='10.0.0.1', priority=priority)
 
     # Add flows for bridge 1:
     # Trunk1:
-    flow5_payload = ofctl_flow_payload(action='ADD', dpid=DPID_BR1, in_port=6, out_port=4, ip_src='10.0.0.1',
+    flow5_payload = ofctl_flow_payload(action='ADD', dpid=DPID_BR4, in_port=6, out_port=4, ip_src='10.0.0.1',
                                        ip_dst='10.0.0.4', priority=priority)
-    flow6_payload = ofctl_flow_payload(action='ADD', dpid=DPID_BR1, in_port=4, out_port=6, ip_src='10.0.0.4',
+    flow6_payload = ofctl_flow_payload(action='ADD', dpid=DPID_BR4, in_port=4, out_port=6, ip_src='10.0.0.4',
                                        ip_dst='10.0.0.1', priority=priority)
 
     # Now add all the flows
@@ -422,16 +422,16 @@ def add_flows_trunk1(priority=3):
 def add_flows_trunk2(priority=5):
     # Add flows for bridge 0:
     # Trunk1:
-    flow1_payload = ofctl_flow_payload(action='ADD', dpid=DPID_BR0, in_port=1, out_port=7, ip_src='10.0.0.1',
+    flow1_payload = ofctl_flow_payload(action='ADD', dpid=DPID_BR1, in_port=1, out_port=7, ip_src='10.0.0.1',
                                        ip_dst='10.0.0.4', priority=priority)
-    flow2_payload = ofctl_flow_payload(action='ADD', dpid=DPID_BR0, in_port=7, out_port=1, ip_src='10.0.0.4',
+    flow2_payload = ofctl_flow_payload(action='ADD', dpid=DPID_BR1, in_port=7, out_port=1, ip_src='10.0.0.4',
                                        ip_dst='10.0.0.1', priority=priority)
 
     # Add flows for bridge 1:
     # Trunk1:
-    flow5_payload = ofctl_flow_payload(action='ADD', dpid=DPID_BR1, in_port=8, out_port=4, ip_src='10.0.0.1',
+    flow5_payload = ofctl_flow_payload(action='ADD', dpid=DPID_BR4, in_port=8, out_port=4, ip_src='10.0.0.1',
                                        ip_dst='10.0.0.4', priority=priority)
-    flow6_payload = ofctl_flow_payload(action='ADD', dpid=DPID_BR1, in_port=4, out_port=8, ip_src='10.0.0.4',
+    flow6_payload = ofctl_flow_payload(action='ADD', dpid=DPID_BR4, in_port=4, out_port=8, ip_src='10.0.0.4',
                                        ip_dst='10.0.0.1', priority=priority)
 
     # Now add all the flows
@@ -468,26 +468,26 @@ def edit_bidirectional_flows(dpid,in_port,out_port,ip_src,ip_dst,action='ADD',pr
 
 def edit_flows_vm2_vm3_long_path(action='ADD',priority=8):
     # edit flows for bridge 2:
-    edit_bidirectional_flows(action=action, dpid=DPID_BR2, in_port=3, out_port=20,
+    edit_bidirectional_flows(action=action, dpid=DPID_BR2, in_port=2, out_port=22,
                              ip_src='10.0.0.2', ip_dst='10.0.0.3', priority=priority)
     # edit flows for bridge 3:
-    edit_bidirectional_flows(action=action, dpid=DPID_BR3, in_port=19, out_port=2,
+    edit_bidirectional_flows(action=action, dpid=DPID_BR3, in_port=23, out_port=3,
                              ip_src='10.0.0.2', ip_dst='10.0.0.3', priority=priority)
     # edit flows for bridge 0:
-    edit_bidirectional_flows(action=action, dpid=DPID_BR0, in_port=17, out_port=5,
+    edit_bidirectional_flows(action=action, dpid=DPID_BR1, in_port=21, out_port=5,
                              ip_src='10.0.0.2', ip_dst='10.0.0.3', priority=priority)
     # edit flows for bridge 1:
-    edit_bidirectional_flows(action=action, dpid=DPID_BR1, in_port=6, out_port=18,
+    edit_bidirectional_flows(action=action, dpid=DPID_BR4, in_port=6, out_port=24,
                              ip_src='10.0.0.2', ip_dst='10.0.0.3', priority=priority)
 
     return None
 
 def edit_flows_vm2_vm3_short_path(action='ADD', priority=6):
     # Add flows for bridge 2:
-    edit_bidirectional_flows(action=action, dpid=DPID_BR2, in_port=3, out_port=7,
+    edit_bidirectional_flows(action=action, dpid=DPID_BR2, in_port=2, out_port=7,
                              ip_src='10.0.0.2', ip_dst='10.0.0.3', priority=priority)
     # Add flows for bridge 3:
-    edit_bidirectional_flows(action=action, dpid=DPID_BR3, in_port=8, out_port=2,
+    edit_bidirectional_flows(action=action, dpid=DPID_BR3, in_port=8, out_port=3,
                              ip_src='10.0.0.2', ip_dst='10.0.0.3', priority=priority)
     return None
 
