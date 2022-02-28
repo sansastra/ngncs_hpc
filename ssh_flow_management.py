@@ -221,19 +221,19 @@ def iperf_s(vm):
 
 # run tcpdump
 # https://parallel-ssh.readthedocs.io/en/latest/advanced.html?highlight=sudo#run-with-sudo
-def tcpdump_vm(vm,
+def tcpdump_vm(vm, endpoints,
                sudo_password=vm_credentials['1'][2],
-               filename='test-',
+               test_type='single',
                directory=TCP_TEST_DIRECTORY,
                t=IPERF_TIME+3,
                bw=BW_IPERF,
                vm_nic='enp2s0',
                capture_size=96):
     print('running tcpdump')
-    # filename structure: 'test-bandwidth-mm_dd_yyyy-hh-mm-ss.pcap'
+    # filename structure: 'bandwidth|endpoints|test_type|mm_dd_yyyy-hh-mm-ss.pcap'
     # https://www.programiz.com/python-programming/datetime/strftime
-    if filename == 'test-':
-        filename += bw+datetime.datetime.now().strftime("-%m_%d_%Y-%H_%M_%S")+'.pcap'
+
+    filename = bw + "|"+endpoints + "|" + test_type + "|"+datetime.datetime.now().strftime("-%m_%d_%Y-%H_%M_%S")+'.pcap'
     command='timeout ' + str(t)
     command+= ' tcpdump -i ' + vm_nic
     command+= ' -s '+ str(capture_size)
