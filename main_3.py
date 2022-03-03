@@ -41,11 +41,11 @@ gateways:   {ID: [IP, username, password]}
 vms:        {ID: [IP, username, password, Gateway ID]} where gw id is the host server ID for the VM
 '''
 
-IPERF_TIME = 60  # duration of the experiment, in seconds
-RECONFIGURATION_1 = 30
+IPERF_TIME = 20  # duration of the experiment, in seconds
+RECONFIGURATION_1 = 10
 #MAKE_BEFORE_BREAK_2 = 30 #make before break 1 happens at t=0
 RECONFIGURATION_2 = 40
-BW_IPERF = '5g'  # bandwidth for the experiment
+BW_IPERF = '10g'  # bandwidth for the experiment
 TEST_TYPE = 'single'
 
 #ports for optical reconfiguration
@@ -133,8 +133,11 @@ reconfigure = threading.Timer(RECONFIGURATION_1, ots_connect_port, args=(s, PORT
 # This works once you add the user to a group with permissions to run tcpdump without sudo
 # https://askubuntu.com/questions/530920/tcpdump-permissions-problem
 ####tcpdump_vm(vms['1'],endpoints='vm1vm4', test_type=TEST_TYPE,t=IPERF_TIME+3, directory=TCP_TEST_DIRECTORY, bw=BW_IPERF)
-tcpdump_vm(vms['2'],endpoints='vm2vm3', test_type=TEST_TYPE, t=IPERF_TIME+3,  directory=TCP_TEST_DIRECTORY, bw=BW_IPERF)
 
+#tcpdump on tx
+tcpdump_vm(vms['2'],endpoints='vm2vm3\|tx', test_type=TEST_TYPE, t=IPERF_TIME+3,  directory=TCP_TEST_DIRECTORY, bw=BW_IPERF)
+#tcpdump on rx
+#tcpdump_vm(vms['3'],endpoints='vm2vm3\|rx', test_type=TEST_TYPE, t=IPERF_TIME+3,  directory=TCP_TEST_DIRECTORY, bw=BW_IPERF)
 
 # run iperf
 ####iperf_s(vms['4'])
