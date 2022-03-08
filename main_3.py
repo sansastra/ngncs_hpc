@@ -28,6 +28,7 @@ import libraries
 from ssh_flow_management import *
 import json
 import threading
+import time
 
 '''
 ====================================
@@ -41,18 +42,19 @@ gateways:   {ID: [IP, username, password]}
 vms:        {ID: [IP, username, password, Gateway ID]} where gw id is the host server ID for the VM
 '''
 
+NUM_EXPERIMENTS = 22
 IPERF_TIME = 20  # duration of the experiment, in seconds
+MAKE_BEFORE_BREAK_1 = 5 # open flow switch traffic to backup links before optical reconfiguration
 RECONFIGURATION_1 = 10
-#MAKE_BEFORE_BREAK_2 = 30 #make before break 1 happens at t=0
-RECONFIGURATION_2 = 40
+MAKE_BEFORE_BREAK_2 = 15 # open_flow switch traffic to main links after optical reconfiguration
 BW_IPERF = '10g'  # bandwidth for the experiment
-TEST_TYPE = 'single'
+TEST_TYPE = 'single_mbb_v2'
 
-#ports for optical reconfiguration
+# ports for optical reconfiguration
 PORTS_OTS_BEFORE = [[21, 22, 23, 24], [54, 53, 56, 55]]
 PORTS_OTS_AFTER = [[22, 23], [55, 54]]
 
-#Load credentials file
+# Load credentials file
 credentials = json.load(open('credentials.json'))
 
 # define the URL of the sdn controller app ofctl_rest
@@ -61,7 +63,7 @@ ADD_FLOW_URI = credentials['add_flow']
 CLEAR_FLOWS_URI = credentials['clear_flow']
 DELETE_FLOWS_URI = credentials['delete_flow']
 
-# datapath ID of virtual bridges in pica8 switch - TODO: GET THIS DATA AUTOMATICALLY
+# datapath ID of virtual bridges in pica8 switch
 DPID_BR1 = int(credentials['dpid'][0])
 DPID_BR2 = int(credentials['dpid'][1])
 DPID_BR3 = int(credentials['dpid'][2])
@@ -71,14 +73,12 @@ DPID_BR4 = int(credentials['dpid'][3])
 gateway_credentials = credentials['gateway_credentials']
 vm_credentials = credentials['vm_credentials']
 
-#IP of the optical switch for the TCP socket
-ip_ots=credentials["ip_ots"]
-port_ots=credentials["port_ots"]
+# IP of the optical switch for the TCP socket
+ip_ots = credentials["ip_ots"]
+port_ots = credentials["port_ots"]
 
 # tcpdump directory, do not forget to create this in the server before running tcpdump remotely
 TCP_TEST_DIRECTORY = credentials['tcpdump_file_datapath']
-#TCP_TEST_DIRECTORY = "Desktop/pcap_files/"
-
 
 '''
 ===========================================
@@ -99,55 +99,84 @@ s = ots_connect_tcp_socket(ip=ip_ots, port=port_ots)
 # create optical links
 ots_connect_port(s, port_in=PORTS_OTS_BEFORE[0], port_out=PORTS_OTS_BEFORE[1])
 
-
-# clear flow tables for all bridges
-# Do not forget to check that all the bridges are connected to the controller.
-del_all_flows(DPID_BR1)
-del_all_flows(DPID_BR2)
-del_all_flows(DPID_BR3)
-del_all_flows(DPID_BR4)
-
-# Initialize flows. Call before connecting to servers. Make before break approach
-
-# link between servers 1 and 4 through bridges 0 and 1.
-####add_flows_trunk1(priority=10)
-
-# link between servers 2 and 3 througn bridges 2,0,1,3 (long path)
-edit_flows_vm2_vm3_long_path(action='ADD', priority=8)
+# Connect to gateways (host servers) and virtual machines (guest vm)
+gws, vms = connect_to_vms_pssh(gateway_credentials=gateway_credentials,
+                               vm_credentials=vm_credentials)
 
 
-# Connect to gateways and virtual machines
-gws, vms = connect_to_vms_pssh()
+for i in range(0, NUM_EXPERIMENTS):
+    # clear flow tables for all bridges
+    # Do not forget to check that all the bridges are connected to the controller.
+    del_all_flows(DPID_BR1)
+    del_all_flows(DPID_BR2)
+    del_all_flows(DPID_BR3)
+    del_all_flows(DPID_BR4)
 
-# Now create the threads for reconfiguration.
-thread_instance = []
+    # Initialize flows. Call before connecting to servers.
 
-# Reconfigure link between vm2 and vm3 by creating new links on optical switch
-#https://stackoverflow.com/questions/25734595/python-threading-confusing-code-int-object-is-not-callable
-reconfigure = threading.Timer(RECONFIGURATION_1, ots_connect_port, args=(s, PORTS_OTS_AFTER[0], PORTS_OTS_AFTER[1],))
-#reconfigure.start()
-#thread_instance.append(reconfigure)
+    # link between servers 1 and 4 through bridges 0 and 1.
+    ####add_flows_trunk1(priority=10)
+
+    # link between servers 2 and 3 througn bridges 2,1,4,3, passing through optical switch (long path)
+    edit_flows_vm2_vm3_long_path(action='ADD', priority=8)
 
 
-# run packet capture
-# This works once you add the user to a group with permissions to run tcpdump without sudo
-# https://askubuntu.com/questions/530920/tcpdump-permissions-problem
-####tcpdump_vm(vms['1'],endpoints='vm1vm4', test_type=TEST_TYPE,t=IPERF_TIME+3, directory=TCP_TEST_DIRECTORY, bw=BW_IPERF)
+    # Now create the threads for reconfiguration.
+    thread_instance = []
 
-#tcpdump on tx
-tcpdump_vm(vms['2'],endpoints='vm2vm3\|tx', test_type=TEST_TYPE, t=IPERF_TIME+3,  directory=TCP_TEST_DIRECTORY, bw=BW_IPERF)
-#tcpdump on rx
-#tcpdump_vm(vms['3'],endpoints='vm2vm3\|rx', test_type=TEST_TYPE, t=IPERF_TIME+3,  directory=TCP_TEST_DIRECTORY, bw=BW_IPERF)
+    '''
+    Make before break
+    '''
 
-# run iperf
-####iperf_s(vms['4'])
-iperf_s(vms['3'])
-####iperf_c(vms['1'], t=IPERF_TIME, b=BW_IPERF, ip_s='10.0.0.4')
-iperf_c(vms['2'], t=IPERF_TIME, b=BW_IPERF, ip_s='10.0.0.3')
+    # 1. Send the traffic to backup links.
+    openflow_switch_traffic_1 = threading.Timer(MAKE_BEFORE_BREAK_1,
+                                                edit_flows_vm2_vm3_long_path_backup,
+                                                args=("ADD", 10,))
 
-#try starting the reconfigure thread after running iperf and tcpdump.
-reconfigure.start()
-thread_instance.append(reconfigure)
+    # 2.  Reconfigure link between vm2 and vm3 by creating new links on optical switch
+    # https://stackoverflow.com/questions/25734595/python-threading-confusing-code-int-object-is-not-callable
+    reconfigure = threading.Timer(RECONFIGURATION_1,
+                                  ots_connect_port,
+                                  args=(s, PORTS_OTS_AFTER[0], PORTS_OTS_AFTER[1],))
 
-for thread in thread_instance:
-    thread.join()
+    # 3. Send the traffic back to reconfigured link through optical switch.
+    openflow_switch_traffic_2 = threading.Timer(MAKE_BEFORE_BREAK_2,
+                                                edit_flows_vm2_vm3_long_path_backup,
+                                                args=("DELETE", 10,))
+
+    # run packet capture
+    # This works once you add the user to a group with permissions to run tcpdump without sudo
+    # https://askubuntu.com/questions/530920/tcpdump-permissions-problem
+    ####tcpdump_vm(vms['1'],endpoints='vm1vm4', test_type=TEST_TYPE,t=IPERF_TIME+3, directory=TCP_TEST_DIRECTORY, bw=BW_IPERF)
+
+    # tcpdump on tx
+
+    tcpdump_vm(vms['2'],
+               endpoints='vm2vm3\|tx',
+               test_type=TEST_TYPE,
+               t=IPERF_TIME + 3,
+               directory=TCP_TEST_DIRECTORY,
+               bw=BW_IPERF)
+
+
+    # tcpdump on rx
+    # tcpdump_vm(vms['3'],endpoints='vm2vm3\|rx', test_type=TEST_TYPE, t=IPERF_TIME+3,  directory=TCP_TEST_DIRECTORY, bw=BW_IPERF)
+
+    # run iperf
+    ####iperf_s(vms['4'])
+    iperf_s(vms['3'])
+    ####iperf_c(vms['1'], t=IPERF_TIME, b=BW_IPERF, ip_s='10.0.0.4')
+    iperf_c(vms['2'], t=IPERF_TIME, b=BW_IPERF, ip_s='10.0.0.3')
+
+    # start threads after running iperf and tcpdump for accurate reconfiguration at the desired time
+    reconfigure.start()
+    openflow_switch_traffic_1.start()
+    openflow_switch_traffic_2.start()
+
+    thread_instance.extend([openflow_switch_traffic_1, reconfigure, openflow_switch_traffic_2])
+
+    for thread in thread_instance:
+        thread.join()
+
+    time.sleep(IPERF_TIME+5)
+    print("---done experiment " + str(i+1) + "---")

@@ -3,8 +3,10 @@ Script to connect to the virtual machines through the gateways node1 and node2
 jumpssh: blocking
 https://pypi.org/project/jumpssh/
 
-fabric: non blocking
+fabric: non blocking implementation with threads. Did not work.
 https://www.fabfile.org/index.html
+
+parallel ssh: non blocking
 
 William Orozco
 worozco at ucdavis dot edu
@@ -54,7 +56,7 @@ ADD_FLOW_URI = credentials['add_flow']
 CLEAR_FLOWS_URI = credentials['clear_flow']
 DELETE_FLOWS_URI = credentials['delete_flow']
 
-# datapath ID of virtual bridges in pica8 switch - TODO: GET THIS DATA AUTOMATICALLY
+# datapath ID of virtual bridges in pica8 switch
 DPID_BR1 = int(credentials['dpid'][0])
 DPID_BR2 = int(credentials['dpid'][1])
 DPID_BR3 = int(credentials['dpid'][2])
@@ -117,18 +119,6 @@ def connect_to_vms_jumpssh(gateway_credentials=gateway_credentials, vm_credentia
     print('connected to guest vms')
     return gateway_session, vm_session
 
-
-def close_all_ssh(vms, gws):
-    # close vms first
-    for vm in vms:
-        vm.close()
-    print('closing ssh vm')
-    # then close gws
-    for gw in gws:
-        gw.close()
-    print('closing ssh gateways')
-    return None
-
 # https://stackoverflow.com/questions/51237956/python-how-do-i-authenticate-ssh-connection-with-fabric-module
 # Method using fabric
 def connect_to_vms_fabric(gateway_credentials=gateway_credentials, vm_credentials=vm_credentials):
@@ -157,7 +147,6 @@ def connect_to_vms_fabric(gateway_credentials=gateway_credentials, vm_credential
     print('connected to guest vms')
     return gateway_session, vm_session
 
-
 # Method using parallel ssh
 def connect_to_vms_pssh(gateway_credentials=gateway_credentials, vm_credentials=vm_credentials):
     gateway_session = {}
@@ -176,46 +165,42 @@ def connect_to_vms_pssh(gateway_credentials=gateway_credentials, vm_credentials=
     print('connected to host servers')
     # 2. Create the ssh connection to the virtual machines (guest servers)
     for i, val in enumerate(vm_credentials.keys()):
-        # try:
-        # vm_credentials[val][3] has the host server ID, the key in the gateway sessions dict.
-        vm_session[val] = pssh.clients.ParallelSSHClient(
-            hosts=[vm_credentials[val][0]],
-            host_config=[HostConfig(user=vm_credentials[val][1],
-                                    password=vm_credentials[val][2],
-                                    proxy_host=gateway_credentials[str(vm_credentials[val][3])][0],
-                                    proxy_user=gateway_credentials[str(vm_credentials[val][3])][1],
-                                    proxy_password=gateway_credentials[str(vm_credentials[val][3])][2])]
-        )
-        '''
-                pssh.clients.ParallelSSHClient(
-                    hosts=[vm_credentials[val][0]],
-                    host_config=[user=vm_credentials[val][1],
-                                 password =vm_credentials[val][2],
-                                 proxy_host=gateway_credentials[str(vm_credentials[val][3])][0]])
-                                 '''
-        # except:
-        #    print('Could not connect to guest vm: ' + vm_credentials[val][0])
+        try:
+            # vm_credentials[val][3] has the host server ID, the key in the gateway sessions dict.
+            vm_session[val] = pssh.clients.ParallelSSHClient(
+                hosts=[vm_credentials[val][0]],
+                host_config=[HostConfig(user=vm_credentials[val][1],
+                                        password=vm_credentials[val][2],
+                                        proxy_host=gateway_credentials[str(vm_credentials[val][3])][0],
+                                        proxy_user=gateway_credentials[str(vm_credentials[val][3])][1],
+                                        proxy_password=gateway_credentials[str(vm_credentials[val][3])][2])]
+            )
+        except:
+           print('Could not connect to guest vm: ' + vm_credentials[val][0])
     print('connected to guest vms')
+    print('---done---')
     return gateway_session, vm_session
 
 
 # run iperf client
 def iperf_c(vm, t=IPERF_TIME, b=BW_IPERF, ip_s='10.0.0.4'):
-    print('running iperf client')
-    # print(vm.run_cmd('iperf3 -c ' + ip_s + ' -t ' + str(t)))
-    # print(vm.run('iperf3 -c ' + ip_s + ' -t ' + str(t)))
+    output = vm.run_command('hostname')
+    print('running iperf client on: ')
+    for line in output[0].stdout:
+        print(line)
     vm.run_command('iperf3 -c ' + ip_s + ' -t ' + str(t) + ' -b ' + str(b))
-    print('finishing iperf client')
+    print('---done---')
     return None
 
 
 # run iperf server
 def iperf_s(vm):
-    print('running iperf server')
-    # print(vm.run_cmd('iperf3 -s -1'))
-    # print(vm.run('iperf3 -s -1'))
+    output = vm.run_command('hostname')
+    print('running iperf server on: ')
+    for line in output[0].stdout:
+        print(line)
     vm.run_command('iperf3 -s -1')
-    print('finishing iperf server')
+    print('---done---')
     return None
 
 
@@ -229,7 +214,10 @@ def tcpdump_vm(vm, endpoints,
                bw=BW_IPERF,
                vm_nic='enp2s0',
                capture_size=96):
-    print('running tcpdump')
+    output = vm.run_command('hostname')
+    print('running tcpdump on: ')
+    for line in output[0].stdout:
+        print(line)
     # filename structure: 'bandwidth|endpoints|test_type|mm_dd_yyyy-hh-mm-ss.pcap'
     # https://www.programiz.com/python-programming/datetime/strftime
 
@@ -242,19 +230,7 @@ def tcpdump_vm(vm, endpoints,
     print(command)
     #out = vm.run_command(command)
     vm.run_command(command)
-                        #'sudo timeout '
-                         #+ str(t)
-                         #+ ' tcpdump -i '
-                         #+ vm_nic
-                         #+ ' -s '
-                         #+ str(capture_size)
-                         #+ ' -w '
-                         ##+ str(directory)
-                         #+ filename)
-    #for host_out in out:
-    #    host_out.stdin.write(sudo_password+'\n')
-    #    host_out.stdin.flush()
-    print('finishing tcpdump')
+    print('---done---')
     return None
 
 '''
@@ -473,13 +449,28 @@ def edit_flows_vm2_vm3_long_path(action='ADD',priority=8):
     # edit flows for bridge 3:
     edit_bidirectional_flows(action=action, dpid=DPID_BR3, in_port=23, out_port=3,
                              ip_src='10.0.0.2', ip_dst='10.0.0.3', priority=priority)
-    # edit flows for bridge 0:
+    # edit flows for bridge 1:
     edit_bidirectional_flows(action=action, dpid=DPID_BR1, in_port=21, out_port=5,
                              ip_src='10.0.0.2', ip_dst='10.0.0.3', priority=priority)
-    # edit flows for bridge 1:
+    # edit flows for bridge 4:
     edit_bidirectional_flows(action=action, dpid=DPID_BR4, in_port=6, out_port=24,
                              ip_src='10.0.0.2', ip_dst='10.0.0.3', priority=priority)
 
+    return None
+
+def edit_flows_vm2_vm3_long_path_backup(action='ADD',priority=10):
+    # edit flows for bridge 2:
+    edit_bidirectional_flows(action=action, dpid=DPID_BR2, in_port=2, out_port=10,
+                             ip_src='10.0.0.2', ip_dst='10.0.0.3', priority=priority)
+    # edit flows for bridge 3:
+    edit_bidirectional_flows(action=action, dpid=DPID_BR3, in_port=12, out_port=3,
+                             ip_src='10.0.0.2', ip_dst='10.0.0.3', priority=priority)
+    # edit flows for bridge 1:
+    edit_bidirectional_flows(action=action, dpid=DPID_BR1, in_port=9, out_port=5,
+                             ip_src='10.0.0.2', ip_dst='10.0.0.3', priority=priority)
+    # edit flows for bridge 4:
+    edit_bidirectional_flows(action=action, dpid=DPID_BR4, in_port=6, out_port=11,
+                             ip_src='10.0.0.2', ip_dst='10.0.0.3', priority=priority)
     return None
 
 def edit_flows_vm2_vm3_short_path(action='ADD', priority=6):
@@ -519,66 +510,3 @@ def ots_disconnect_all(s):
     s.sendall(cmd)
     return None
 
-
-'''
-===========================================
-Section 3: Experiment
-===========================================
-'''
-
-# Initialize flows. New: call before connecting to servers.
-####add_flows_vm1_vm4()
-
-
-# Connect to gateways and virtual machines
-####gws, vms = connect_to_vms_pssh()
-# gws, vms = connect_to_vms_fabric()
-# print(vms.keys())
-'''
-Threading section - traffic reconfiguration with flow manipulation
-'''
-
-
-####thread_instance = []
-# Reconfigure from trunk1 to trunk2
-####reconfigure = threading.Timer(RECONFIGURATION_1, del_flows_trunk1)
-####reconfigure.start()
-####thread_instance.append(reconfigure)
-
-# Return traffic to trunk1
-#return_traffic = threading.Timer(RECONFIGURATION_2, add_flows_vm1_vm4)
-####return_traffic = threading.Timer(RECONFIGURATION_2, add_flows_trunk1)
-####return_traffic.start()
-####thread_instance.append(return_traffic)
-
-'''
-ssh section - running iperf, tcpdump
-'''
-# run packet capture
-# This works once you add the user to a group with permissions to run tcpdump without sudo
-# https://askubuntu.com/questions/530920/tcpdump-permissions-problem
-####tcpdump_vm(vms['1'])
-
-# run iperf
-####iperf_s(vms['4'])
-####iperf_c(vms['1'])
-
-# iperf_server = threading.Timer(0,iperf_s(vms['4']))
-# iperf_server.start()
-# iperf_client = threading.Timer(0,iperf_c(vms['1']))
-# iperf_client.start()
-
-# iperf_server = multiprocessing.Process(target=iperf_s(vms['4']))
-# iperf_server.start()
-# iperf_client=multiprocessing.Process(target=iperf_c(vms['1']))
-# iperf_client.start()
-
-# iperf_server.join()
-# iperf_client.join()
-
-# close all sessions
-# close_ssh = threading.Timer(61, close_all_ssh(vms, gws))
-# close_ssh.start()
-
-####for thread in thread_instance:
-####    thread.join()
