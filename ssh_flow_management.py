@@ -203,6 +203,14 @@ def iperf_s(vm):
     print('---done---')
     return None
 
+# run hostname server
+def hostname(vm):
+    output = vm.run_command('hostname')
+    print('running hostname on: ')
+    for line in output[0].stdout:
+        print(line)
+    print('---done---')
+    return None
 
 # run tcpdump
 # https://parallel-ssh.readthedocs.io/en/latest/advanced.html?highlight=sudo#run-with-sudo

@@ -42,13 +42,13 @@ gateways:   {ID: [IP, username, password]}
 vms:        {ID: [IP, username, password, Gateway ID]} where gw id is the host server ID for the VM
 '''
 
-NUM_EXPERIMENTS = 22
-IPERF_TIME = 20  # duration of the experiment, in seconds
-MAKE_BEFORE_BREAK_1 = 5 # open flow switch traffic to backup links before optical reconfiguration
-RECONFIGURATION_1 = 10
-MAKE_BEFORE_BREAK_2 = 15 # open_flow switch traffic to main links after optical reconfiguration
+NUM_EXPERIMENTS = 10
+IPERF_TIME = 20  # duration of the experiment, in seconds. the following times are 5+1, 10+1, 15+1 to compensate the delay of initialization steps
+MAKE_BEFORE_BREAK_1 = 6 # open flow switch traffic to backup links before optical reconfiguration
+RECONFIGURATION_1 = 11
+MAKE_BEFORE_BREAK_2 = 16 # open_flow switch traffic to main links after optical reconfiguration
 BW_IPERF = '10g'  # bandwidth for the experiment
-TEST_TYPE = 'single_mbb_v2'
+TEST_TYPE = 'single_mbb_v3_1'
 
 # ports for optical reconfiguration
 PORTS_OTS_BEFORE = [[21, 22, 23, 24], [54, 53, 56, 55]]
@@ -96,43 +96,66 @@ vm2 -------- bridge2                    bridge3 ----------- vm3
 '''
 # Open TCP socket with Optical switch and create connections
 s = ots_connect_tcp_socket(ip=ip_ots, port=port_ots)
-# create optical links
-ots_connect_port(s, port_in=PORTS_OTS_BEFORE[0], port_out=PORTS_OTS_BEFORE[1])
 
 # Connect to gateways (host servers) and virtual machines (guest vm)
 gws, vms = connect_to_vms_pssh(gateway_credentials=gateway_credentials,
                                vm_credentials=vm_credentials)
 
+#execute these dummy console commands on the servers to avoid a long execution time the next time another command is executed.
+hostname(vms['1'])
+hostname(vms['2'])
+hostname(vms['3'])
+hostname(vms['4'])
+
+#run iperf out of the for loop, so it is executed only once.
+#iperf_s(vms['3'])
+
+#wait a few seconds for ssh connections to be ready
+#time.sleep(3)
 
 for i in range(0, NUM_EXPERIMENTS):
+    print("*****starting experiment " + str(i + 1) + "*****")
     # clear flow tables for all bridges
     # Do not forget to check that all the bridges are connected to the controller.
+    start=time.time()
     del_all_flows(DPID_BR1)
     del_all_flows(DPID_BR2)
     del_all_flows(DPID_BR3)
     del_all_flows(DPID_BR4)
+    end=time.time()
+    print("elapsed time for resetting flows: " + str(end - start))
+    print("---reset flows on all bridges---")
 
-    # Initialize flows. Call before connecting to servers.
+    # create optical links
+    start=time.time()
+    ots_connect_port(s, port_in=PORTS_OTS_BEFORE[0], port_out=PORTS_OTS_BEFORE[1])
+    end=time.time()
+    print("elapsed time for resetting optical connections: " + str(end - start))
+    print("---reset optical connections---")
 
     # link between servers 1 and 4 through bridges 0 and 1.
     ####add_flows_trunk1(priority=10)
 
-    # link between servers 2 and 3 througn bridges 2,1,4,3, passing through optical switch (long path)
+    # link between servers 2 and 3 through bridges 2,1,4,3, passing through optical switch (long path)
+    start=time.time()
     edit_flows_vm2_vm3_long_path(action='ADD', priority=8)
+    end=time.time()
+    print("elapsed time for installing initial flows on ToR: " + str(end - start))
 
-
-    # Now create the threads for reconfiguration.
+    # Now create the array that will store the thread timers for reconfiguration.
     thread_instance = []
 
     '''
     Make before break
     '''
-
+    start=time.time()
     # 1. Send the traffic to backup links.
     openflow_switch_traffic_1 = threading.Timer(MAKE_BEFORE_BREAK_1,
                                                 edit_flows_vm2_vm3_long_path_backup,
                                                 args=("ADD", 10,))
-
+    openflow_switch_traffic_1_1 = threading.Timer(MAKE_BEFORE_BREAK_1+1,
+                                                edit_flows_vm2_vm3_long_path,
+                                                args=("DELETE", 8,))
     # 2.  Reconfigure link between vm2 and vm3 by creating new links on optical switch
     # https://stackoverflow.com/questions/25734595/python-threading-confusing-code-int-object-is-not-callable
     reconfigure = threading.Timer(RECONFIGURATION_1,
@@ -141,42 +164,54 @@ for i in range(0, NUM_EXPERIMENTS):
 
     # 3. Send the traffic back to reconfigured link through optical switch.
     openflow_switch_traffic_2 = threading.Timer(MAKE_BEFORE_BREAK_2,
+                                                edit_flows_vm2_vm3_long_path,
+                                                args=("ADD", 12,))
+    openflow_switch_traffic_2_1 = threading.Timer(MAKE_BEFORE_BREAK_2+1,
                                                 edit_flows_vm2_vm3_long_path_backup,
                                                 args=("DELETE", 10,))
 
+    end=time.time()
+    print("elapsed time for initializing threading timers: " + str(end - start))
     # run packet capture
     # This works once you add the user to a group with permissions to run tcpdump without sudo
     # https://askubuntu.com/questions/530920/tcpdump-permissions-problem
     ####tcpdump_vm(vms['1'],endpoints='vm1vm4', test_type=TEST_TYPE,t=IPERF_TIME+3, directory=TCP_TEST_DIRECTORY, bw=BW_IPERF)
 
     # tcpdump on tx
-
+    start=time.time()
     tcpdump_vm(vms['2'],
                endpoints='vm2vm3\|tx',
                test_type=TEST_TYPE,
                t=IPERF_TIME + 3,
                directory=TCP_TEST_DIRECTORY,
                bw=BW_IPERF)
-
-
+    end=time.time()
+    print("elapsed time for executing tcpdump: " + str(end - start))
     # tcpdump on rx
     # tcpdump_vm(vms['3'],endpoints='vm2vm3\|rx', test_type=TEST_TYPE, t=IPERF_TIME+3,  directory=TCP_TEST_DIRECTORY, bw=BW_IPERF)
 
+    start = time.time()
     # run iperf
     ####iperf_s(vms['4'])
     iperf_s(vms['3'])
     ####iperf_c(vms['1'], t=IPERF_TIME, b=BW_IPERF, ip_s='10.0.0.4')
     iperf_c(vms['2'], t=IPERF_TIME, b=BW_IPERF, ip_s='10.0.0.3')
 
+    end = time.time()
+    print("elapsed time for executing iperf commands: "+str(end-start))
     # start threads after running iperf and tcpdump for accurate reconfiguration at the desired time
     reconfigure.start()
     openflow_switch_traffic_1.start()
+    openflow_switch_traffic_1_1.start()
     openflow_switch_traffic_2.start()
+    openflow_switch_traffic_2_1.start()
 
-    thread_instance.extend([openflow_switch_traffic_1, reconfigure, openflow_switch_traffic_2])
-
+    thread_instance.extend([openflow_switch_traffic_1, openflow_switch_traffic_1_1,
+                            reconfigure,
+                            openflow_switch_traffic_2, openflow_switch_traffic_2_1])
+    print(thread_instance)
     for thread in thread_instance:
         thread.join()
 
     time.sleep(IPERF_TIME+5)
-    print("---done experiment " + str(i+1) + "---")
+    print("*****done experiment " + str(i+1) + "*****")
