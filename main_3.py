@@ -42,14 +42,19 @@ gateways:   {ID: [IP, username, password]}
 vms:        {ID: [IP, username, password, Gateway ID]} where gw id is the host server ID for the VM
 '''
 
-NUM_EXPERIMENTS = 10
-IPERF_TIME = 20  # duration of the experiment, in seconds. the following times are 5+1, 10+1, 15+1 to compensate the delay of initialization steps
+NUM_EXPERIMENTS = 1
+IPERF_TIME = 20  # duration of the experiment, in seconds.
+#Except for bandwidth steering (dual),the following times are 5+1, 10+1, 15+1 to compensate the delay of initialization steps
 MAKE_BEFORE_BREAK_1 = 6 # open flow switch traffic to backup links before optical reconfiguration
 RECONFIGURATION_1 = 11
 MAKE_BEFORE_BREAK_2 = 16 # open_flow switch traffic to main links after optical reconfiguration
 BW_IPERF = '10g'  # bandwidth for the experiment
+#   test types: single_mbb_<suffix>, single_ots_<suffix>, dual_mbb_<suffix>, dual_ots_<suffix>
 #TEST_TYPE = 'single_mbb_v3_1'
-TEST_TYPE = 'single_ost_v1'
+#TEST_TYPE = 'single_ost_v1'
+TEST_TYPE = 'dual_mbb_v1'
+
+TCP_CAPTURE=True
 
 # ports for optical reconfiguration
 PORTS_OTS_BEFORE = [[21, 22, 23, 24], [54, 53, 56, 55]]
@@ -136,11 +141,12 @@ for i in range(0, NUM_EXPERIMENTS):
     print("elapsed time for resetting optical connections: " + str(end - start))
     print("---reset optical connections---")
 
-    # link between servers 1 and 4 through bridges 0 and 1.
-    ####add_flows_trunk1(priority=10)
+    start = time.time()
+    # link between servers 1 and 4 through bridges 1 and 4.
+    if 'dual' in TEST_TYPE:  # run tcpdump on vm1 if dual test for bandwidth steering experiment
+        edit_flows_vm1_vm4_short_path(action='ADD', priority=9)
 
     # link between servers 2 and 3 through bridges 2,1,4,3, passing through optical switch (long path)
-    start=time.time()
     edit_flows_vm2_vm3_long_path(action='ADD', priority=8)
     end=time.time()
     print("elapsed time for installing initial flows on ToR: " + str(end - start))
@@ -182,26 +188,35 @@ for i in range(0, NUM_EXPERIMENTS):
     # https://askubuntu.com/questions/530920/tcpdump-permissions-problem
     ####tcpdump_vm(vms['1'],endpoints='vm1vm4', test_type=TEST_TYPE,t=IPERF_TIME+3, directory=TCP_TEST_DIRECTORY, bw=BW_IPERF)
 
-
-    # tcpdump on tx
-    start=time.time()
-    tcpdump_vm(vms['2'],
-               endpoints='vm2vm3\|tx',
-               test_type=TEST_TYPE,
-               t=IPERF_TIME + 3,
-               directory=TCP_TEST_DIRECTORY,
-               bw=BW_IPERF)
-    end=time.time()
-    print("elapsed time for executing tcpdump: " + str(end - start))
-    # tcpdump on rx
-    # tcpdump_vm(vms['3'],endpoints='vm2vm3\|rx', test_type=TEST_TYPE, t=IPERF_TIME+3,  directory=TCP_TEST_DIRECTORY, bw=BW_IPERF)
+    if TCP_CAPTURE:
+        # tcpdump on tx
+        start=time.time()
+        tcpdump_vm(vms['2'],
+                   endpoints='vm2vm3\|tx',
+                   test_type=TEST_TYPE,
+                   t=IPERF_TIME + 3,
+                   directory=TCP_TEST_DIRECTORY,
+                   bw=BW_IPERF)
+        if 'dual' in TEST_TYPE: #run tcpdump on vm1 if dual test for bandwidth steering experiment
+            tcpdump_vm(vms['1'],
+                       endpoints='vm1vm4\|tx',
+                       test_type=TEST_TYPE,
+                       t=IPERF_TIME + 3,
+                       directory=TCP_TEST_DIRECTORY,
+                       bw=BW_IPERF)
+        end=time.time()
+        print("elapsed time for executing tcpdump: " + str(end - start))
+        # tcpdump on rx
+        # tcpdump_vm(vms['3'],endpoints='vm2vm3\|rx', test_type=TEST_TYPE, t=IPERF_TIME+3,  directory=TCP_TEST_DIRECTORY, bw=BW_IPERF)
 
 
     start = time.time()
     # run iperf
-    ####iperf_s(vms['4'])
+    if 'dual' in TEST_TYPE:  # run tcpdump on vm1 if dual test for bandwidth steering experiment
+        iperf_s(vms['4'])
     iperf_s(vms['3'])
-    ####iperf_c(vms['1'], t=IPERF_TIME, b=BW_IPERF, ip_s='10.0.0.4')
+    if 'dual' in TEST_TYPE:  # run tcpdump on vm1 if dual test for bandwidth steering experiment
+        iperf_c(vms['1'], t=IPERF_TIME, b=BW_IPERF, ip_s='10.0.0.4')
     iperf_c(vms['2'], t=IPERF_TIME, b=BW_IPERF, ip_s='10.0.0.3')
 
     end = time.time()

@@ -450,6 +450,15 @@ def edit_bidirectional_flows(dpid,in_port,out_port,ip_src,ip_dst,action='ADD',pr
           + ' with priority ' + str(priority))
     return None
 
+def edit_flows_vm1_vm4_short_path(action='ADD',priority=9):
+    # edit flows for bridge 1:
+    edit_bidirectional_flows(action=action, dpid=DPID_BR1, in_port=1, out_port=5,
+                             ip_src='10.0.0.1', ip_dst='10.0.0.4', priority=priority)
+    # edit flows for bridge 4:
+    edit_bidirectional_flows(action=action, dpid=DPID_BR4, in_port=6, out_port=4,
+                             ip_src='10.0.0.1', ip_dst='10.0.0.4', priority=priority)
+    return None
+
 def edit_flows_vm2_vm3_long_path(action='ADD',priority=8):
     # edit flows for bridge 2:
     edit_bidirectional_flows(action=action, dpid=DPID_BR2, in_port=2, out_port=22,
