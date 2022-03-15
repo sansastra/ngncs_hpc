@@ -42,17 +42,17 @@ gateways:   {ID: [IP, username, password]}
 vms:        {ID: [IP, username, password, Gateway ID]} where gw id is the host server ID for the VM
 '''
 
-NUM_EXPERIMENTS = 1
+NUM_EXPERIMENTS = 5
 IPERF_TIME = 20  # duration of the experiment, in seconds.
 #Except for bandwidth steering (dual),the following times are 5+1, 10+1, 15+1 to compensate the delay of initialization steps
-MAKE_BEFORE_BREAK_1 = 6 # open flow switch traffic to backup links before optical reconfiguration
-RECONFIGURATION_1 = 11
-MAKE_BEFORE_BREAK_2 = 16 # open_flow switch traffic to main links after optical reconfiguration
+MAKE_BEFORE_BREAK_1 = 11 # open flow switch traffic to backup links before optical reconfiguration
+RECONFIGURATION_1 = 11.05
+MAKE_BEFORE_BREAK_2 = 12.05 # open_flow switch traffic to main links after optical reconfiguration
 BW_IPERF = '10g'  # bandwidth for the experiment
 #   test types: single_mbb_<suffix>, single_ots_<suffix>, dual_mbb_<suffix>, dual_ots_<suffix>
 #TEST_TYPE = 'single_mbb_v3_1'
 #TEST_TYPE = 'single_ost_v1'
-TEST_TYPE = 'dual_mbb_v1'
+TEST_TYPE = 'dual_mbb_v2'
 
 TCP_CAPTURE=True
 
@@ -122,6 +122,7 @@ hostname(vms['4'])
 
 
 for i in range(0, NUM_EXPERIMENTS):
+    start_overall=time.time()
     print("*****starting experiment " + str(i + 1) + "*****")
     # clear flow tables for all bridges
     # Do not forget to check that all the bridges are connected to the controller.
@@ -160,10 +161,10 @@ for i in range(0, NUM_EXPERIMENTS):
     start=time.time()
     # 1. Send the traffic to backup links.
     if 'mbb' in TEST_TYPE:
-        openflow_switch_traffic_1 = threading.Timer(MAKE_BEFORE_BREAK_1,
+        openflow_switch_traffic_1 = threading.Timer(MAKE_BEFORE_BREAK_1-1,
                                                     edit_flows_vm2_vm3_long_path_backup,
-                                                    args=("ADD", 10,))
-        openflow_switch_traffic_1_1 = threading.Timer(MAKE_BEFORE_BREAK_1+1,
+                                                    args=("ADD", 6,))
+        openflow_switch_traffic_1_1 = threading.Timer(MAKE_BEFORE_BREAK_1,
                                                     edit_flows_vm2_vm3_long_path,
                                                     args=("DELETE", 8,))
     # 2.  Reconfigure link between vm2 and vm3 by creating new links on optical switch
@@ -174,12 +175,12 @@ for i in range(0, NUM_EXPERIMENTS):
 
     # 3. Send the traffic back to reconfigured link through optical switch.
     if 'mbb' in TEST_TYPE:
-        openflow_switch_traffic_2 = threading.Timer(MAKE_BEFORE_BREAK_2,
+        openflow_switch_traffic_2 = threading.Timer(MAKE_BEFORE_BREAK_2-1,
                                                     edit_flows_vm2_vm3_long_path,
-                                                    args=("ADD", 12,))
-        openflow_switch_traffic_2_1 = threading.Timer(MAKE_BEFORE_BREAK_2+1,
+                                                    args=("ADD", 4,))
+        openflow_switch_traffic_2_1 = threading.Timer(MAKE_BEFORE_BREAK_2,
                                                     edit_flows_vm2_vm3_long_path_backup,
-                                                    args=("DELETE", 10,))
+                                                    args=("DELETE", 6,))
 
     end=time.time()
     print("elapsed time for initializing threading timers: " + str(end - start))
@@ -238,4 +239,6 @@ for i in range(0, NUM_EXPERIMENTS):
         thread.join()
 
     time.sleep(IPERF_TIME+5)
+    end_overall=time.time()
+    print("experiment took: "+str(end_overall-start_overall))
     print("*****done experiment " + str(i+1) + "*****")

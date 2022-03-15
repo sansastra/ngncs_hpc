@@ -184,10 +184,10 @@ def connect_to_vms_pssh(gateway_credentials=gateway_credentials, vm_credentials=
 
 # run iperf client
 def iperf_c(vm, t=IPERF_TIME, b=BW_IPERF, ip_s='10.0.0.4'):
-    output = vm.run_command('hostname')
-    print('running iperf client on: ')
-    for line in output[0].stdout:
-        print(line)
+    #output = vm.run_command('hostname')
+    print('running iperf client')
+    #for line in output[0].stdout:
+    #    print(line)
     vm.run_command('iperf3 -c ' + ip_s + ' -t ' + str(t) + ' -b ' + str(b))
     print('---done---')
     return None
@@ -195,10 +195,10 @@ def iperf_c(vm, t=IPERF_TIME, b=BW_IPERF, ip_s='10.0.0.4'):
 
 # run iperf server
 def iperf_s(vm):
-    output = vm.run_command('hostname')
-    print('running iperf server on: ')
-    for line in output[0].stdout:
-        print(line)
+    #output = vm.run_command('hostname')
+    print('running iperf server')
+    #for line in output[0].stdout:
+    #    print(line)
     vm.run_command('iperf3 -s -1')
     print('---done---')
     return None
@@ -222,10 +222,10 @@ def tcpdump_vm(vm, endpoints,
                bw=BW_IPERF,
                vm_nic='enp2s0',
                capture_size=96):
-    output = vm.run_command('hostname')
-    print('running tcpdump on: ')
-    for line in output[0].stdout:
-        print(line)
+    #output = vm.run_command('hostname')
+    print('running tcpdump')
+    #for line in output[0].stdout:
+    #    print(line)
     # filename structure: 'bandwidth|endpoints|test_type|mm_dd_yyyy-hh-mm-ss.pcap'
     # https://www.programiz.com/python-programming/datetime/strftime
 
@@ -519,8 +519,9 @@ def ots_connect_port(s, port_in, port_out):
     cmd = ':oxc:swit:conn:only (@{0}),(@{1}); stat?\r\n'.format(port_in_str, port_out_str)
     cmd = bytes(cmd, 'utf-8')
     s.sendall(cmd)
-    reply = s.recv(4096)
-    return reply
+    #reply = s.recv(4096) #Reading from recv adds to the total execution time
+    #return reply
+    return None
 
 def ots_disconnect_all(s):
     cmd=b':oxc:swit:disc:all\r\n'
