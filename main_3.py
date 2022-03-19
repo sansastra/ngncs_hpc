@@ -42,17 +42,19 @@ gateways:   {ID: [IP, username, password]}
 vms:        {ID: [IP, username, password, Gateway ID]} where gw id is the host server ID for the VM
 '''
 
-NUM_EXPERIMENTS = 5
+NUM_EXPERIMENTS = 10
 IPERF_TIME = 20  # duration of the experiment, in seconds.
 #Except for bandwidth steering (dual),the following times are 5+1, 10+1, 15+1 to compensate the delay of initialization steps
 MAKE_BEFORE_BREAK_1 = 11 # open flow switch traffic to backup links before optical reconfiguration
 RECONFIGURATION_1 = 11.05
-MAKE_BEFORE_BREAK_2 = 12.05 # open_flow switch traffic to main links after optical reconfiguration
-BW_IPERF = '10g'  # bandwidth for the experiment
+MAKE_BEFORE_BREAK_2 = 12.1 # open_flow switch traffic to main links after optical reconfiguration
+BW_IPERF_1 = '4g'  #  data rate of stream of data #1, between vm2 and vm3
+BW_IPERF_2 = '3g'  #  data rate of stream of data #2, between vm1 and vm4
+
 #   test types: single_mbb_<suffix>, single_ots_<suffix>, dual_mbb_<suffix>, dual_ots_<suffix>
 #TEST_TYPE = 'single_mbb_v3_1'
 #TEST_TYPE = 'single_ost_v1'
-TEST_TYPE = 'dual_mbb_v2'
+TEST_TYPE = 'dual_mbb_v3'
 
 TCP_CAPTURE=True
 
@@ -187,7 +189,7 @@ for i in range(0, NUM_EXPERIMENTS):
     # run packet capture
     # This works once you add the user to a group with permissions to run tcpdump without sudo
     # https://askubuntu.com/questions/530920/tcpdump-permissions-problem
-    ####tcpdump_vm(vms['1'],endpoints='vm1vm4', test_type=TEST_TYPE,t=IPERF_TIME+3, directory=TCP_TEST_DIRECTORY, bw=BW_IPERF)
+    ####tcpdump_vm(vms['1'],endpoints='vm1vm4', test_type=TEST_TYPE,t=IPERF_TIME+3, directory=TCP_TEST_DIRECTORY, bw=BW_IPERF_2)
 
     if TCP_CAPTURE:
         # tcpdump on tx
@@ -197,18 +199,18 @@ for i in range(0, NUM_EXPERIMENTS):
                    test_type=TEST_TYPE,
                    t=IPERF_TIME + 3,
                    directory=TCP_TEST_DIRECTORY,
-                   bw=BW_IPERF)
+                   bw=BW_IPERF_1)
         if 'dual' in TEST_TYPE: #run tcpdump on vm1 if dual test for bandwidth steering experiment
             tcpdump_vm(vms['1'],
                        endpoints='vm1vm4\|tx',
                        test_type=TEST_TYPE,
                        t=IPERF_TIME + 3,
                        directory=TCP_TEST_DIRECTORY,
-                       bw=BW_IPERF)
+                       bw=BW_IPERF_2)
         end=time.time()
         print("elapsed time for executing tcpdump: " + str(end - start))
         # tcpdump on rx
-        # tcpdump_vm(vms['3'],endpoints='vm2vm3\|rx', test_type=TEST_TYPE, t=IPERF_TIME+3,  directory=TCP_TEST_DIRECTORY, bw=BW_IPERF)
+        # tcpdump_vm(vms['3'],endpoints='vm2vm3\|rx', test_type=TEST_TYPE, t=IPERF_TIME+3,  directory=TCP_TEST_DIRECTORY, bw=BW_IPERF_1)
 
 
     start = time.time()
@@ -217,8 +219,8 @@ for i in range(0, NUM_EXPERIMENTS):
         iperf_s(vms['4'])
     iperf_s(vms['3'])
     if 'dual' in TEST_TYPE:  # run tcpdump on vm1 if dual test for bandwidth steering experiment
-        iperf_c(vms['1'], t=IPERF_TIME, b=BW_IPERF, ip_s='10.0.0.4')
-    iperf_c(vms['2'], t=IPERF_TIME, b=BW_IPERF, ip_s='10.0.0.3')
+        iperf_c(vms['1'], t=IPERF_TIME, b=BW_IPERF_2, ip_s='10.0.0.4')
+    iperf_c(vms['2'], t=IPERF_TIME, b=BW_IPERF_1, ip_s='10.0.0.3')
 
     end = time.time()
     print("elapsed time for executing iperf commands: "+str(end-start))
