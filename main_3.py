@@ -42,14 +42,15 @@ gateways:   {ID: [IP, username, password]}
 vms:        {ID: [IP, username, password, Gateway ID]} where gw id is the host server ID for the VM
 '''
 
-NUM_EXPERIMENTS = 10
+NUM_EXPERIMENTS = 20
 IPERF_TIME = 20  # duration of the experiment, in seconds.
 #Except for bandwidth steering (dual),the following times are 5+1, 10+1, 15+1 to compensate the delay of initialization steps
 MAKE_BEFORE_BREAK_1 = 11 # open flow switch traffic to backup links before optical reconfiguration
 RECONFIGURATION_1 = 11.05
-MAKE_BEFORE_BREAK_2 = 12.1 # open_flow switch traffic to main links after optical reconfiguration
-BW_IPERF_1 = '4g'  #  data rate of stream of data #1, between vm2 and vm3
-BW_IPERF_2 = '3g'  #  data rate of stream of data #2, between vm1 and vm4
+MAKE_BEFORE_BREAK_2 = 12.05 # open_flow switch traffic to main links after optical reconfiguration
+dt = 0.05 # for soft flow handoff (add lower priority flow at T-dt before deleting higher priority flow at T)
+BW_IPERF_1 = ''  #  data rate of stream of data #1, between vm2 and vm3
+BW_IPERF_2 = ''  #  data rate of stream of data #2, between vm1 and vm4
 
 #   test types: single_mbb_<suffix>, single_ots_<suffix>, dual_mbb_<suffix>, dual_ots_<suffix>
 #TEST_TYPE = 'single_mbb_v3_1'
@@ -163,7 +164,7 @@ for i in range(0, NUM_EXPERIMENTS):
     start=time.time()
     # 1. Send the traffic to backup links.
     if 'mbb' in TEST_TYPE:
-        openflow_switch_traffic_1 = threading.Timer(MAKE_BEFORE_BREAK_1-1,
+        openflow_switch_traffic_1 = threading.Timer(MAKE_BEFORE_BREAK_1-dt,
                                                     edit_flows_vm2_vm3_long_path_backup,
                                                     args=("ADD", 6,))
         openflow_switch_traffic_1_1 = threading.Timer(MAKE_BEFORE_BREAK_1,
@@ -177,7 +178,7 @@ for i in range(0, NUM_EXPERIMENTS):
 
     # 3. Send the traffic back to reconfigured link through optical switch.
     if 'mbb' in TEST_TYPE:
-        openflow_switch_traffic_2 = threading.Timer(MAKE_BEFORE_BREAK_2-1,
+        openflow_switch_traffic_2 = threading.Timer(MAKE_BEFORE_BREAK_2-dt,
                                                     edit_flows_vm2_vm3_long_path,
                                                     args=("ADD", 4,))
         openflow_switch_traffic_2_1 = threading.Timer(MAKE_BEFORE_BREAK_2,

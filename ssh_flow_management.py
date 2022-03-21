@@ -183,12 +183,15 @@ def connect_to_vms_pssh(gateway_credentials=gateway_credentials, vm_credentials=
 
 
 # run iperf client
-def iperf_c(vm, t=IPERF_TIME, b=BW_IPERF, ip_s='10.0.0.4'):
+def iperf_c(vm, t=IPERF_TIME, b='', ip_s='10.0.0.4'):
     #output = vm.run_command('hostname')
     print('running iperf client')
     #for line in output[0].stdout:
     #    print(line)
-    vm.run_command('iperf3 -c ' + ip_s + ' -t ' + str(t) + ' -b ' + str(b))
+    cmd = 'iperf3 -c ' + ip_s + ' -t ' + str(t)
+    if b != '':
+        cmd += ' -b ' + str(b)
+    vm.run_command(cmd)
     print('---done---')
     return None
 
