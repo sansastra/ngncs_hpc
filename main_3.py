@@ -55,7 +55,7 @@ BW_IPERF_2 = ''  #  data rate of stream of data #2, between vm1 and vm4
 #   test types: single_mbb_<suffix>, single_ots_<suffix>, dual_mbb_<suffix>, dual_ots_<suffix>
 #TEST_TYPE = 'single_mbb_v3_1'
 #TEST_TYPE = 'single_ost_v1'
-TEST_TYPE = 'dual_mbb_v3'
+TEST_TYPE = 'dual_ost_v3'
 
 TCP_CAPTURE=True
 
@@ -196,14 +196,14 @@ for i in range(0, NUM_EXPERIMENTS):
         # tcpdump on tx
         start=time.time()
         tcpdump_vm(vms['2'],
-                   endpoints='vm2vm3\|tx',
+                   endpoints='vm2vm3)tx',
                    test_type=TEST_TYPE,
                    t=IPERF_TIME + 3,
                    directory=TCP_TEST_DIRECTORY,
                    bw=BW_IPERF_1)
         if 'dual' in TEST_TYPE: #run tcpdump on vm1 if dual test for bandwidth steering experiment
             tcpdump_vm(vms['1'],
-                       endpoints='vm1vm4\|tx',
+                       endpoints='vm1vm4)tx',
                        test_type=TEST_TYPE,
                        t=IPERF_TIME + 3,
                        directory=TCP_TEST_DIRECTORY,
@@ -211,7 +211,7 @@ for i in range(0, NUM_EXPERIMENTS):
         end=time.time()
         print("elapsed time for executing tcpdump: " + str(end - start))
         # tcpdump on rx
-        # tcpdump_vm(vms['3'],endpoints='vm2vm3\|rx', test_type=TEST_TYPE, t=IPERF_TIME+3,  directory=TCP_TEST_DIRECTORY, bw=BW_IPERF_1)
+        # tcpdump_vm(vms['3'],endpoints='vm2vm3)rx', test_type=TEST_TYPE, t=IPERF_TIME+3,  directory=TCP_TEST_DIRECTORY, bw=BW_IPERF_1)
 
 
     start = time.time()

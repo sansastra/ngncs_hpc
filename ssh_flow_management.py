@@ -229,10 +229,10 @@ def tcpdump_vm(vm, endpoints,
     print('running tcpdump')
     #for line in output[0].stdout:
     #    print(line)
-    # filename structure: 'bandwidth|endpoints|test_type|mm_dd_yyyy-hh-mm-ss.pcap'
+    # filename structure: 'bandwidth)endpoints)test_type)mm_dd_yyyy-hh-mm-ss.pcap'
     # https://www.programiz.com/python-programming/datetime/strftime
 
-    filename = bw + "\|"+endpoints + "\|" + test_type + "\|"+datetime.datetime.now().strftime("%m_%d_%Y-%H_%M_%S")+'.pcap'
+    filename = bw + ")"+endpoints + ")" + test_type + ")"+datetime.datetime.now().strftime("%m_%d_%Y-%H_%M_%S")+'.pcap'
     command='timeout ' + str(t)
     command+= ' tcpdump -i ' + vm_nic
     command+= ' -s '+ str(capture_size)
